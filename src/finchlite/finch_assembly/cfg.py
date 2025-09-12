@@ -1,4 +1,4 @@
-from ..finch_assembly.nodes import *
+from .nodes import *
 from typing import Dict
 
 class BasicBlock:
@@ -22,11 +22,19 @@ class BasicBlock:
         return f"BasicBlock(id={self.id}, stmts={self.statements}, succs={self.successors})"
     
 class CFG:
-    def __init__(self, func_name: str): # TODO: also pass argument types to allow fuctions with same names but different signatures
+    def __init__(self, func_name: str): 
+        # TODO: also pass argument types to allow fuctions with same names but different signatures
+        
+        self.block_counter = 0
         self.name = func_name
         self.blocks = {}
+
+        # initialize ENTRY and EXIT blocks
+        self.entry_block = self.new_block()
+        self.exit_block = self.new_block()
+
         self.current_block = self.new_block()
-        self.block_counter = 0
+        self.entry_block.add_successor(self.current_block, self.blocks)
     
     def new_block(self):
         bid = f"{self.name}_{self.block_counter}"
@@ -40,7 +48,7 @@ class CFGBuilderContext: # is it required to have a 'main' entry point for a pro
         self.cfgs = {}
         self.current_cfg = None
 
-    def new_cfg(self, name: str):
+    def new_cfg(self, name: str) -> CFG:
         new_cfg = CFG(name)
         self.cfgs[name] = new_cfg
         return new_cfg
@@ -48,7 +56,7 @@ class CFGBuilderContext: # is it required to have a 'main' entry point for a pro
     def build(self, node: AssemblyNode):
         return self(node)
     
-    def __call__(self, node: AssemblyNode):
+    def __call__(self, node: AssemblyNode, break_block_id: str = None):
         match node:
             case Literal(value):
                 self.current_cfg.current_block.add_statement(("literal", value))
@@ -64,6 +72,9 @@ class CFGBuilderContext: # is it required to have a 'main' entry point for a pro
                 self.current_cfg.current_block.add_statement(("getattr", obj, attr))
             case SetAttr(obj, attr, value):
                 self.current_cfg.current_block.add_statement(("setattr", obj, attr, value))
+            case Call(Literal(_) as lit, args):
+                # TODO: handle it as a statement for now (?)
+                ...
             case Load(buffer, index):
                 self.current_cfg.current_block.add_statement(("load", buffer, index))
             case Store(buffer, index, value):
@@ -78,18 +89,19 @@ class CFGBuilderContext: # is it required to have a 'main' entry point for a pro
                 self.current_cfg.current_block.add_statement(("assign", name, val))
             case Block(bodies):
                 for body in bodies:
-                    self(body)
+                    self(body, break_block_id)
             case If(cond, body):
                 cond_block = self.current_cfg.current_block
                 cond_block.add_statement(("if_cond", cond))
 
                 then_block = self.current_cfg.new_block()
                 self.current_cfg.current_block = then_block
-                self(body)
+                self(body, break_block_id)
                 
                 after_block = self.current_cfg.new_block()
                 cond_block.add_successor(then_block.id, self.current_cfg.blocks)
                 cond_block.add_successor(after_block.id, self.current_cfg.blocks)
+
                 self.current_cfg.current_block.add_successor(after_block.id, self.current_cfg.blocks)
                 self.current_cfg.current_block = after_block
             case IfElse(cond, body, else_body):
@@ -98,16 +110,17 @@ class CFGBuilderContext: # is it required to have a 'main' entry point for a pro
 
                 then_block = self.current_cfg.new_block()
                 self.current_cfg.current_block = then_block
-                self(body)
+                self(body, break_block_id)
                 
                 after_block = self.current_cfg.new_block()
                 cond_block.add_successor(then_block.id, self.current_cfg.blocks)
-                cond_block.add_successor(after_block.id, self.current_cfg.blocks) # i think it's not necessary
+                cond_block.add_successor(after_block.id, self.current_cfg.blocks)
                 self.current_cfg.current_block.add_successor(after_block.id, self.current_cfg.blocks)
 
                 else_block = self.current_cfg.new_block()
                 self.current_cfg.current_block = else_block
-                self(else_body)
+                self(else_body, break_block_id)
+
                 self.current_cfg.current_block.add_successor(after_block.id, self.current_cfg.blocks)
                 self.current_cfg.current_block = after_block
             case WhileLoop(cond, body):
@@ -121,7 +134,7 @@ class CFGBuilderContext: # is it required to have a 'main' entry point for a pro
                 cond_block.add_successor(after_block.id, self.current_cfg.blocks)
                 
                 self.current_cfg.current_block = body_block
-                self(body)
+                self(body, after_block.id)
                 
                 self.current_cfg.current_block.add_successor(cond_block.id, self.current_cfg.blocks)
                 self.current_cfg.current_block = after_block
@@ -140,17 +153,34 @@ class CFGBuilderContext: # is it required to have a 'main' entry point for a pro
                 cond_block.add_successor(after_block, self.current_cfg.blocks)
 
                 self.current_cfg.current_block = body_block
-                self(body_block)
+                self(body_block, after_block.id)
 
                 self.current_cfg.current_block.add_statement(("for_inc", var))
                 self.current_cfg.current_block.add_successor(cond_block.id, self.current_cfg.blocks)
 
                 self.current_cfg.current_block = after_block
-            case Return(value): # TODO: do the same thing as in Break but exit to the 'End' block of a function
+            case Return(value):
                 self.current_cfg.current_block.add_statement(("return", value))
-                self.current_cfg.current_block = self.current_cfg.new_block()
+                
+                # when Return is met, make a connection to the EXIT block of function (cfg)
+                self.current_cfg.current_block.add_successor(self.current_cfg.exit_block.id, self.current_cfg.blocks)
+                
+                # create a block where we going to store all unreachable statements
+                unreachable_block = self.current_cfg.new_block()
+                self.current_cfg.current_block = unreachable_block
+            case Break():
+                self.current_cfg.current_block.add_statement(("break"))
+
+                # when Break is met, make a connection to the AFTER block of ForLoop/WhileLoop
+                self.current_cfg.current_block.add_successor(break_block_id, self.current_cfg.blocks)
+
+                # create a block where we going to store all unreachable statements
+                unreachable_block = self.current_cfg.new_block()
+                self.current_cfg.current_block = unreachable_block
             case BufferLoop(buf, var, body):
-                raise NotImplementedError(node) # TODO: implement BufferLoop printing and then implement this
+                # TODO: 1) implement BufferLoop printing and then implement this
+                # TODO: 2) implement BufferLoop here
+                raise NotImplementedError(node)
             case Function(Variable(_, _), args, body):
                 for arg in args:
                     match arg:
@@ -160,11 +190,6 @@ class CFGBuilderContext: # is it required to have a 'main' entry point for a pro
                             raise NotImplementedError(f"Unrecognized argument type: {arg}")
                 
                 self(body)
-            case Call(Literal(_) as lit, args): # do we have to the handle it here value when it's handled in 'Assign'?
-                ...
-            case Break():
-                # TODO: pass the exit node whenever diving into the for/while and exit to that block (look at the interpreter)
-                ...
             case Module(funcs):
                 for func in funcs:
                     if not isinstance(func, Function):
