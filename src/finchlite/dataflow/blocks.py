@@ -52,9 +52,30 @@ class CFGBuilderContext: # is it required to have a 'main' entry point for a pro
     
     def __call__(self, node: AssemblyNode):
         match node:
-            # what are Repack, GetAttr, SetAttr, etc.?
-            case Literal(_) | Unpack(_, _) | Repack(_) | Resize(_, _) | Variable(_, _) | GetAttr(_, _) | SetAttr(_, _, _) | Load(_, _) | Store(_, _, _) | Length(_) | Slot(_, _) | Stack(_, _):
-                return None #TODO: add them as statements
+            case Literal(value):
+                self.current_cfg.current_block.add_statement(("literal", value))
+            case Unpack(lhs, rhs):
+                self.current_cfg.current_block.add_statement(("unpack", lhs, rhs))
+            case Repack(val):
+                self.current_cfg.current_block.add_statement(("repack", val))
+            case Resize(buffer, new_size):
+                self.current_cfg.current_block.add_statement(("resize", buffer, new_size))
+            case Variable(name, type):
+                self.current_cfg.current_block.add_statement(("variable", name, type))
+            case GetAttr(obj, attr):
+                self.current_cfg.current_block.add_statement(("getattr", obj, attr))
+            case SetAttr(obj, attr, value):
+                self.current_cfg.current_block.add_statement(("setattr", obj, attr, value))
+            case Load(buffer, index):
+                self.current_cfg.current_block.add_statement(("load", buffer, index))
+            case Store(buffer, index, value):
+                self.current_cfg.current_block.add_statement(("store", buffer, index, value))
+            case Length(buffer):
+                self.current_cfg.current_block.add_statement(("length", buffer))
+            case Slot(name, type):
+                self.current_cfg.current_block.add_statement(("slot", name, type))
+            case Stack(obj, type):
+                self.current_cfg.current_block.add_statement(("stack", obj, type))
             case Assign(Variable(name, _), val):
                 self.current_cfg.current_block.add_statement(("assign", name, val))
             case Block(bodies):
@@ -63,9 +84,11 @@ class CFGBuilderContext: # is it required to have a 'main' entry point for a pro
             case If(cond, body):
                 cond_block = self.current_cfg.current_block
                 cond_block.add_statement(("if_cond", cond))
+
                 then_block = self.current_cfg.new_block()
                 self.current_cfg.current_block = then_block
                 self(body)
+                
                 after_block = self.current_cfg.new_block()
                 cond_block.add_successor(then_block.id, self.current_cfg.blocks)
                 cond_block.add_successor(after_block.id, self.current_cfg.blocks)
