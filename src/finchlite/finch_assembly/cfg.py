@@ -1,7 +1,5 @@
 from ..finch_assembly.nodes import *
-from typing import Dict, List, Any
-
-# TODO: move the entire thing to the finch_assenbly folder (create a cfg.py)
+from typing import Dict
 
 class BasicBlock:
     def __init__(self, id):
