@@ -206,4 +206,69 @@ def test_asm_if_copy_propagation(file_regression):
     cfg = assembly_build_cfg(root)
     copy_propagation = AssemblyCopyPropagation(cfg)
     copy_propagation.analyze()
-    file_regression.check(str(copy_propagation.output_states), extension=".txt")
+    # TODO: make a better printing for copy propogataion results
+    file_regression.check(f"INPUT_STATES:\n{str(copy_propagation.input_states)}\nOUTPUT_STATES:\n{str(copy_propagation.output_states)}", extension=".txt")
+
+def test_asm_dot_copy_propagation(file_regression):
+    c = asm.Variable("c", np.float64)
+    i = asm.Variable("i", np.int64)
+    ab = NumpyBuffer(np.array([1, 2, 3], dtype=np.float64))
+    bb = NumpyBuffer(np.array([4, 5, 6], dtype=np.float64))
+    ab_v = asm.Variable("a", ab.ftype)
+    ab_slt = asm.Slot("a_", ab.ftype)
+    bb_v = asm.Variable("b", bb.ftype)
+    bb_slt = asm.Slot("b_", bb.ftype)
+
+    prgm = asm.Module(
+        (
+            asm.Function(
+                asm.Variable("dot_product", np.float64),
+                (
+                    ab_v,
+                    bb_v,
+                ),
+                asm.Block(
+                    (
+                        asm.Assign(c, asm.Literal(np.float64(0.0))),
+                        asm.Unpack(ab_slt, ab_v),
+                        asm.Unpack(bb_slt, bb_v),
+                        asm.ForLoop(
+                            i,
+                            asm.Literal(np.int64(0)),
+                            asm.Length(ab_slt),
+                            asm.Block(
+                                (
+                                    asm.Assign(
+                                        c,
+                                        asm.Call(
+                                            asm.Literal(operator.add),
+                                            (
+                                                c,
+                                                asm.Call(
+                                                    asm.Literal(operator.mul),
+                                                    (
+                                                        asm.Load(ab_slt, i),
+                                                        asm.Load(bb_slt, i),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    ),
+                                )
+                            ),
+                        ),
+                        asm.Repack(ab_slt),
+                        asm.Repack(bb_slt),
+                        asm.Return(c),
+                    )
+                ),
+            ),
+        )
+    )
+
+    prgm = assembly_number_uses(prgm)
+    cfg = assembly_build_cfg(prgm)
+    copy_propagation = AssemblyCopyPropagation(cfg)
+    copy_propagation.analyze()
+    # TODO: make a better printing for copy propogataion results
+    file_regression.check(f"INPUT_STATES:\n{str(copy_propagation.input_states)}\nOUTPUT_STATES:\n{str(copy_propagation.output_states)}", extension=".txt")
