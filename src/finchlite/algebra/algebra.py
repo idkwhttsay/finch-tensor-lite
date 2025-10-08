@@ -61,7 +61,6 @@ import numpy as np
 
 _properties: dict[tuple[type | Hashable, str, str], Any] = {}
 
-
 StableNumber = bool | int | float | complex | np.generic
 
 
