@@ -84,6 +84,11 @@ class DataFlowAnalysis(ABC):
         }
 
     @abstractmethod
+    def __str__(self) -> str:
+        """Print the dataflow analysis results in a structured format."""
+        ...
+
+    @abstractmethod
     def transfer(self, stmts, state: dict) -> dict:
         """
         Transfer function for the data flow analysis.
