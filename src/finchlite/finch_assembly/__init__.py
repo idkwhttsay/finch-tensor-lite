@@ -2,6 +2,7 @@ from .assembly_dataflow import (
     AssemblyCFGBuilder,
     AssemblyCopyPropagation,
     assembly_build_cfg,
+    assembly_copy_propagation,
     assembly_number_uses,
 )
 from .buffer import Buffer, BufferFType, element_type, length_type
@@ -81,6 +82,7 @@ __all__ = [
     "WhileLoop",
     "assembly_build_cfg",
     "assembly_check_types",
+    "assembly_copy_propagation",
     "assembly_number_uses",
     "element_type",
     "length_type",

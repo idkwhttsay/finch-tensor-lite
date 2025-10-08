@@ -39,9 +39,17 @@ from .nodes import (
 )
 
 
+def assembly_copy_propagation(node: AssemblyNode):
+    ctx = AssemblyCopyPropagation(assembly_build_cfg(node))
+    ctx.analyze()
+    return ctx
+
+
 def assembly_build_cfg(node: AssemblyNode):
     ctx = AssemblyCFGBuilder(namespace=Namespace(node))
-    return ctx.build(node)
+
+    # build cfg based on the numbered AST and return it
+    return ctx.build(assembly_number_uses(node))
 
 
 def assembly_number_uses(root: AssemblyNode) -> AssemblyNode:

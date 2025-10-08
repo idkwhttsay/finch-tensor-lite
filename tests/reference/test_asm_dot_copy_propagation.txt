@@ -1,4 +1,36 @@
 INPUT_STATES:
-{'ENTRY_0': {}, 'EXIT_1': {}, 'dot_product_2': {}, 'dot_product_3': {}, 'dot_product_4': {'c': Literal(val=np.float64(0.0)), 'j': Literal(val=np.int64(0))}, 'dot_product_5': {'c': Literal(val=np.float64(0.0)), 'j': Literal(val=np.int64(0))}, 'dot_product_6': {}}
+    ENTRY_0: #succs=[dot_product_2]
+        (empty)
+    EXIT_1: #succs=[]
+        (empty)
+    dot_product_2: #succs=[dot_product_4, dot_product_5]
+        (empty)
+    dot_product_3: #succs=[EXIT_1]
+        (empty)
+    dot_product_4: #succs=[dot_product_2]
+        c = 0.0
+        j = 0
+    dot_product_5: #succs=[dot_product_3]
+        c = 0.0
+        j = 0
+    dot_product_6: #succs=[dot_product_3]
+        (empty)
+
 OUTPUT_STATES:
-{'ENTRY_0': {}, 'EXIT_1': {}, 'dot_product_2': {'c': Literal(val=np.float64(0.0)), 'j': Literal(val=np.int64(0))}, 'dot_product_3': {}, 'dot_product_4': {'c': Call(op=Literal(val=_operator.add), args=(TaggedVariable(variable={'name': 'c', 'type': <class 'numpy.float64'>}, id=2), Call(op=Literal(val=_operator.mul), args=(Load(buffer=Slot(name='a_', type=NumpyBufferFType(float64)), index=TaggedVariable(variable={'name': 'i', 'type': <class 'numpy.int64'>}, id=1)), Load(buffer=Slot(name='b_', type=NumpyBufferFType(float64)), index=TaggedVariable(variable={'name': 'i', 'type': <class 'numpy.int64'>}, id=2)))))), 'j': Call(op=Literal(val=_operator.add), args=(TaggedVariable(variable={'name': 'j', 'type': <class 'numpy.int64'>}, id=0), Literal(val=np.int64(1))))}, 'dot_product_5': {'c': Literal(val=np.float64(0.0)), 'j': Literal(val=np.int64(0))}, 'dot_product_6': {}}
+    ENTRY_0: #succs=[dot_product_2]
+        (empty)
+    EXIT_1: #succs=[]
+        (empty)
+    dot_product_2: #succs=[dot_product_4, dot_product_5]
+        c = 0.0
+        j = 0
+    dot_product_3: #succs=[EXIT_1]
+        (empty)
+    dot_product_4: #succs=[dot_product_2]
+        c = add(c_2, mul(load(slot(a_, np_buf_t(float64)), i_1), load(slot(b_, np_buf_t(float64)), i_2)))
+        j = add(j_0, 1)
+    dot_product_5: #succs=[dot_product_3]
+        c = 0.0
+        j = 0
+    dot_product_6: #succs=[dot_product_3]
+        (empty)
