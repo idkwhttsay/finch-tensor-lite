@@ -340,3 +340,45 @@ class AssemblyCopyPropagation(DataFlowAnalysis):
             return val1.val == val2.val
 
         return False
+
+    def __str__(self) -> str:
+        """
+        Print the Copy Propagation dataflow analysis results in a structured format.
+        """
+        lines = []
+        blocks = self.cfg.blocks.values()
+
+        lines.append("INPUT_STATES:")
+        for block in blocks:
+            if block.successors:
+                succ_names = [succ.id for succ in block.successors]
+                succ_str = f"#succs=[{', '.join(succ_names)}]"
+            else:
+                succ_str = "#succs=[]"
+
+            input_state = self.input_states.get(block.id, {})
+            lines.append(f"    {block.id}: {succ_str}")
+
+            if input_state:
+                for var_name, value in input_state.items():
+                    lines.append(f"        {var_name} = {value}")
+            else:
+                lines.append("        (empty)")
+
+        lines.append("\nOUTPUT_STATES:")
+        for block in blocks:
+            if block.successors:
+                succ_names = [succ.id for succ in block.successors]
+                succ_str = f"#succs=[{', '.join(succ_names)}]"
+            else:
+                succ_str = "#succs=[]"
+
+            output_state = self.output_states.get(block.id, {})
+            lines.append(f"    {block.id}: {succ_str}")
+            if output_state:
+                for var_name, value in output_state.items():
+                    lines.append(f"        {var_name} = {value}")
+            else:
+                lines.append("        (empty)")
+
+        return "\n".join(lines)
