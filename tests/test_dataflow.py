@@ -207,7 +207,11 @@ def test_asm_if_copy_propagation(file_regression):
     copy_propagation = AssemblyCopyPropagation(cfg)
     copy_propagation.analyze()
     # TODO: make a better printing for copy propogataion results
-    file_regression.check(f"INPUT_STATES:\n{str(copy_propagation.input_states)}\nOUTPUT_STATES:\n{str(copy_propagation.output_states)}", extension=".txt")
+    file_regression.check(
+        f"INPUT_STATES:\n{str(copy_propagation.input_states)}\nOUTPUT_STATES:\n{str(copy_propagation.output_states)}",
+        extension=".txt",
+    )
+
 
 def test_asm_dot_copy_propagation(file_regression):
     c = asm.Variable("c", np.float64)
@@ -271,4 +275,7 @@ def test_asm_dot_copy_propagation(file_regression):
     copy_propagation = AssemblyCopyPropagation(cfg)
     copy_propagation.analyze()
     # TODO: make a better printing for copy propogataion results
-    file_regression.check(f"INPUT_STATES:\n{str(copy_propagation.input_states)}\nOUTPUT_STATES:\n{str(copy_propagation.output_states)}", extension=".txt")
+    file_regression.check(
+        f"INPUT_STATES:\n{str(copy_propagation.input_states)}\nOUTPUT_STATES:\n{str(copy_propagation.output_states)}",
+        extension=".txt",
+    )
