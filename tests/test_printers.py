@@ -400,3 +400,206 @@ def test_tagged_asm_printer_dot(file_regression):
 
     prgm = assembly_number_uses(prgm)
     file_regression.check(str(prgm), extension=".txt")
+
+
+def test_tagged_asm_printer_comprehensive(file_regression):
+    a = asm.Variable("a", np.int64)
+    b = asm.Variable("b", np.int64)
+    c = asm.Variable("c", np.int64)
+    d = asm.Variable("d", np.int64)
+    result = asm.Variable("result", np.int64)
+    i = asm.Variable("i", np.int64)
+    j = asm.Variable("j", np.int64)
+    temp = asm.Variable("temp", np.int64)
+
+    helper_func = asm.Function(
+        asm.Variable("compute", np.int64),
+        (asm.Variable("x", np.int64), asm.Variable("y", np.int64)),
+        asm.Block(
+            (
+                asm.Assign(temp, asm.Variable("x", np.int64)),
+                asm.Assign(
+                    temp,
+                    asm.Call(
+                        asm.Literal(operator.add),
+                        (temp, asm.Variable("y", np.int64)),
+                    ),
+                ),
+                asm.Return(temp),
+            )
+        ),
+    )
+
+    main_func = asm.Function(
+        asm.Variable("main", np.int64),
+        (),
+        asm.Block(
+            (
+                asm.Assign(a, asm.Literal(np.int64(10))),
+                asm.Assign(b, a),
+                asm.Assign(c, b),
+                asm.Assign(d, asm.Literal(np.int64(5))),
+                asm.If(
+                    asm.Call(
+                        asm.Literal(operator.gt),
+                        (c, asm.Literal(np.int64(5))),
+                    ),
+                    asm.Block(
+                        (
+                            asm.Assign(
+                                a,
+                                asm.Call(
+                                    asm.Literal(operator.add),
+                                    (a, d),
+                                ),
+                            ),
+                            asm.Assign(b, a),
+                        )
+                    ),
+                ),
+                asm.Assign(result, asm.Literal(np.int64(0))),
+                asm.ForLoop(
+                    i,
+                    asm.Literal(np.int64(0)),
+                    asm.Literal(np.int64(5)),
+                    asm.Block(
+                        (
+                            asm.Assign(temp, i),
+                            asm.Assign(
+                                result,
+                                asm.Call(
+                                    asm.Literal(operator.add),
+                                    (result, temp),
+                                ),
+                            ),
+                            asm.If(
+                                asm.Call(
+                                    asm.Literal(operator.eq),
+                                    (
+                                        asm.Call(
+                                            asm.Literal(operator.mod),
+                                            (i, asm.Literal(np.int64(2))),
+                                        ),
+                                        asm.Literal(np.int64(0)),
+                                    ),
+                                ),
+                                asm.Block(
+                                    (
+                                        asm.Assign(
+                                            result,
+                                            asm.Call(
+                                                asm.Literal(operator.mul),
+                                                (result, asm.Literal(np.int64(2))),
+                                            ),
+                                        ),
+                                    )
+                                ),
+                            ),
+                        )
+                    ),
+                ),
+                asm.IfElse(
+                    asm.Call(
+                        asm.Literal(operator.gt),
+                        (result, asm.Literal(np.int64(20))),
+                    ),
+                    asm.Block(
+                        (
+                            asm.Assign(c, result),
+                            asm.Assign(
+                                result,
+                                asm.Call(
+                                    asm.Literal(operator.add),
+                                    (c, b),
+                                ),
+                            ),
+                        )
+                    ),
+                    asm.Block(
+                        (
+                            asm.Assign(c, b),
+                            asm.Assign(
+                                result,
+                                asm.Call(
+                                    asm.Literal(operator.mul),
+                                    (c, asm.Literal(np.int64(3))),
+                                ),
+                            ),
+                        )
+                    ),
+                ),
+                asm.ForLoop(
+                    i,
+                    asm.Literal(np.int64(0)),
+                    asm.Literal(np.int64(3)),
+                    asm.Block(
+                        (
+                            asm.Assign(a, i),
+                            asm.ForLoop(
+                                j,
+                                asm.Literal(np.int64(0)),
+                                asm.Literal(np.int64(2)),
+                                asm.Block(
+                                    (
+                                        asm.Assign(b, j),
+                                        asm.Assign(
+                                            result,
+                                            asm.Call(
+                                                asm.Literal(operator.add),
+                                                (
+                                                    result,
+                                                    asm.Call(
+                                                        asm.Literal(operator.add),
+                                                        (a, b),
+                                                    ),
+                                                ),
+                                            ),
+                                        ),
+                                    )
+                                ),
+                            ),
+                        )
+                    ),
+                ),
+                asm.Assign(d, result),
+                asm.IfElse(
+                    asm.Call(
+                        asm.Literal(operator.lt),
+                        (d, asm.Literal(np.int64(100))),
+                    ),
+                    asm.Block(
+                        (
+                            asm.Assign(c, d),
+                            asm.IfElse(
+                                asm.Call(
+                                    asm.Literal(operator.gt),
+                                    (c, asm.Literal(np.int64(50))),
+                                ),
+                                asm.Block(
+                                    (
+                                        asm.Assign(
+                                            result,
+                                            asm.Call(
+                                                asm.Literal(operator.mul),
+                                                (c, asm.Literal(np.int64(2))),
+                                            ),
+                                        ),
+                                    )
+                                ),
+                                asm.Block((asm.Assign(result, c),)),
+                            ),
+                        )
+                    ),
+                    asm.Block((asm.Assign(result, d),)),
+                ),
+                asm.Assign(a, result),
+                asm.Assign(b, a),
+                asm.Return(b),
+            )
+        ),
+    )
+
+    root = asm.Module((helper_func, main_func))
+
+    root = assembly_number_uses(root)
+    file_regression.check(str(root), extension=".txt")
