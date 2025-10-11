@@ -10,6 +10,7 @@ from ..symbolic import (
     PostWalk,
     Rewrite,
 )
+from ..util import qual_str
 from .nodes import (
     AssemblyNode,
     Assert,
@@ -304,7 +305,7 @@ class AssemblyCopyPropagation(DataFlowAnalysis):
     def join(self, state_1: dict, state_2: dict) -> dict:
         result = {}
 
-        # Only keep copy relationships that exist in both states with the same value
+        # only keep copy relationships that exist in both states with the same value
         for var_name in state_1:
             if var_name in state_2 and self._values_equal(
                 state_1[var_name], state_2[var_name]
@@ -343,42 +344,65 @@ class AssemblyCopyPropagation(DataFlowAnalysis):
 
     def __str__(self) -> str:
         """
-        Print the Copy Propagation dataflow analysis results in a structured format.
+        Print the CFG with dataflow annotations embedded in statements.
+        Annotate variables in expressions with their known values.
         """
         lines = []
-        blocks = self.cfg.blocks.values()
+        blocks = list(self.cfg.blocks.values())
 
-        lines.append("INPUT_STATES:")
         for block in blocks:
+            # block header
             if block.successors:
                 succ_names = [succ.id for succ in block.successors]
                 succ_str = f"#succs=[{', '.join(succ_names)}]"
             else:
                 succ_str = "#succs=[]"
 
+            lines.append(f"{block.id}: {succ_str}")
+
+            # get the input state for this block
             input_state = self.input_states.get(block.id, {})
-            lines.append(f"    {block.id}: {succ_str}")
 
-            if input_state:
-                for var_name, value in input_state.items():
-                    lines.append(f"        {var_name} = {value}")
-            else:
-                lines.append("        (empty)")
+            # annotate each statement with analysis output
+            for stmt in block.statements:
+                annotated_stmt = self._annotate_statement(stmt, input_state)
+                lines.append(f"    {annotated_stmt}")
 
-        lines.append("\nOUTPUT_STATES:")
-        for block in blocks:
-            if block.successors:
-                succ_names = [succ.id for succ in block.successors]
-                succ_str = f"#succs=[{', '.join(succ_names)}]"
-            else:
-                succ_str = "#succs=[]"
-
-            output_state = self.output_states.get(block.id, {})
-            lines.append(f"    {block.id}: {succ_str}")
-            if output_state:
-                for var_name, value in output_state.items():
-                    lines.append(f"        {var_name} = {value}")
-            else:
-                lines.append("        (empty)")
+            lines.append("")
 
         return "\n".join(lines)
+
+    def _annotate_statement(self, stmt, state: dict) -> str:
+        """Annotate a statement with dataflow information."""
+
+        match stmt:
+            case Assign(lhs, rhs):
+                rhs_str = self._annotate_expression(rhs, state)
+                return f"{str(lhs)} = {rhs_str}"
+            case Assert(exp):
+                exp_str = self._annotate_expression(exp, state)
+                return f"assert({exp_str})"
+            case _:
+                return str(stmt)
+
+    def _annotate_expression(self, expr, state: dict) -> str:
+        """Recursively annotate an expression with dataflow information."""
+
+        match expr:
+            case Literal(value):
+                return qual_str(value)
+            case TaggedVariable(Variable(name, _), id):
+                var_str = f"{name}_{id}"
+                if name in state:
+                    return f"{var_str}: {str(state[name])}"
+                return var_str
+            case Variable(name, _):
+                if name in state:
+                    return f"{name}: {str(state[name])}"
+                return str(name)
+            case Call(Literal(_) as lit, args):
+                # annotate each argument
+                annotated_args = [self._annotate_expression(arg, state) for arg in args]
+                return f"{qual_str(lit.val)}({', '.join(annotated_args)})"
+            case _:
+                return str(expr)
