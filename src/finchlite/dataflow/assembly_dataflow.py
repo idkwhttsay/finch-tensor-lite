@@ -1,5 +1,3 @@
-from ..symbolic import DataFlowAnalysis
-from ..util import qual_str
 from ..finch_assembly import (
     AssemblyNode,
     Assert,
@@ -8,13 +6,17 @@ from ..finch_assembly import (
     Literal,
     TaggedVariable,
     Variable,
-    assembly_build_cfg
+    assembly_build_cfg,
 )
+from ..symbolic import DataFlowAnalysis
+from ..util import qual_str
+
 
 def assembly_copy_propagation(node: AssemblyNode):
     ctx = AssemblyCopyPropagation(assembly_build_cfg(node))
     ctx.analyze()
     return ctx
+
 
 class AssemblyCopyPropagation(DataFlowAnalysis):
     def direction(self) -> str:
