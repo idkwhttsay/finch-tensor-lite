@@ -1,3 +1,4 @@
+from .buffer import Buffer, BufferFType, element_type, length_type
 from .cfg_builder import (
     AssemblyCFGBuilder,
     AssemblyCopyPropagation,
@@ -5,7 +6,6 @@ from .cfg_builder import (
     assembly_copy_propagation,
     assembly_number_uses,
 )
-from .buffer import Buffer, BufferFType, element_type, length_type
 from .interpreter import AssemblyInterpreter, AssemblyInterpreterKernel
 from .nodes import (
     AssemblyNode,
