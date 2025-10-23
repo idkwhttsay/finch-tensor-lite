@@ -1,4 +1,4 @@
-from .assembly_dataflow import (
+from .cfg_builder import (
     AssemblyCFGBuilder,
     AssemblyCopyPropagation,
     assembly_build_cfg,

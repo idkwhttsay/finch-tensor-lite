@@ -4,7 +4,7 @@ import numpy as np
 
 import finchlite.finch_assembly as asm
 from finchlite.codegen.numpy_buffer import NumpyBuffer
-from finchlite.finch_assembly.assembly_dataflow import (
+from finchlite.finch_assembly.cfg_builder import (
     assembly_build_cfg,
     assembly_copy_propagation,
 )

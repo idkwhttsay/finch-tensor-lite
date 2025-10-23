@@ -294,7 +294,7 @@ class AssemblyCopyPropagation(DataFlowAnalysis):
                         # to the variable being assigned
                         to_remove = []
                         for var, val in new_state.items():
-                            if self._variables_equal(val, lhs):
+                            if val == lhs:
                                 to_remove.append(var)
 
                         for var in to_remove:
@@ -323,11 +323,6 @@ class AssemblyCopyPropagation(DataFlowAnalysis):
             case _:
                 return None
 
-    def _variables_equal(self, var1, var2) -> bool:
-        name1 = self._get_variable_name(var1)
-        name2 = self._get_variable_name(var2)
-        return name1 is not None and name1 == name2
-
     def _values_equal(self, val1, val2) -> bool:
         """
         Check if two values are equal.
@@ -335,7 +330,7 @@ class AssemblyCopyPropagation(DataFlowAnalysis):
         if isinstance(val1, (Variable, TaggedVariable)) and isinstance(
             val2, (Variable, TaggedVariable)
         ):
-            return self._variables_equal(val1, val2)
+            return val1 == val2
 
         if isinstance(val1, Literal) and isinstance(val2, Literal):
             return val1.val == val2.val

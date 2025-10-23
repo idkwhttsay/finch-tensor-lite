@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 
 class BasicBlock:
-    """A basic block of FinchAssembly's Control Flow Graph."""
+    """A basic block of Finch's Control Flow Graph."""
 
     def __init__(self, id: str) -> None:
         self.id = id
