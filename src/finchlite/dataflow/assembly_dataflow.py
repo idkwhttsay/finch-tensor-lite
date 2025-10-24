@@ -1,3 +1,5 @@
+from abc import abstractmethod
+
 from ..finch_assembly import (
     AssemblyNode,
     Assert,
@@ -18,7 +20,46 @@ def assembly_copy_propagation(node: AssemblyNode):
     return ctx
 
 
-class AssemblyCopyPropagation(DataFlowAnalysis):
+class AbstractAssemblyDataflow(DataFlowAnalysis):
+    def stmt_str(self, stmt, state: dict) -> str:
+        """Annotate a statement with lattice values."""
+        match stmt:
+            case Assign(lhs, rhs):
+                rhs_str = self._expr_str(rhs, state)
+                return f"{str(lhs)} = {rhs_str}"
+            case Assert(exp):
+                exp_str = self._expr_str(exp, state)
+                return f"assert({exp_str})"
+            case _:
+                return str(stmt)
+
+    def _expr_str(self, expr, state: dict) -> str:
+        """Annotate an expression with lattice values."""
+        match expr:
+            case Literal(value):
+                return qual_str(value)
+            case TaggedVariable(Variable(name, _), id):
+                var_str = f"{name}_{id}"
+                if name in state:
+                    return f"{var_str}: {self.print_lattice_value(name, state)}"
+                return var_str
+            case Variable(name, _):
+                if name in state:
+                    return f"{name}: {self.print_lattice_value(name, state)}"
+                return str(name)
+            case Call(Literal(_) as lit, args):
+                annotated_args = [self._expr_str(arg, state) for arg in args]
+                return f"{qual_str(lit.val)}({', '.join(annotated_args)})"
+            case _:
+                return str(expr)
+
+    @abstractmethod
+    def print_lattice_value(self, name, state: dict) -> str:
+        """Format the lattice value associated with a variable for annotation."""
+        ...
+
+
+class AssemblyCopyPropagation(AbstractAssemblyDataflow):
     def direction(self) -> str:
         """
         Copy propagation is a forward analysis.
@@ -61,6 +102,32 @@ class AssemblyCopyPropagation(DataFlowAnalysis):
 
         return result
 
+    def print_lattice_value(self, name, state: dict) -> str:
+        visited: set[str] = set()
+        value = state.get(name)
+
+        # iterate through states until we reach a Literal or a variable
+        # without a mapping (root value)
+        while True:
+            match value:
+                case Literal(v):
+                    return qual_str(v)
+                case TaggedVariable(Variable(next_name, _), _) | Variable(next_name, _):
+                    # lattice was was already visited -> return
+                    if next_name in visited:
+                        return str(value)
+
+                    visited.add(next_name)
+                    next_val = state.get(next_name)
+
+                    # reached root value -> return
+                    if next_val is None:
+                        return str(value)
+
+                    value = next_val
+                case _:
+                    return str(value)
+
     def _get_variable_name(self, var) -> str | None:
         match var:
             case Variable(name, _):
@@ -71,9 +138,7 @@ class AssemblyCopyPropagation(DataFlowAnalysis):
                 return None
 
     def _values_equal(self, val1, val2) -> bool:
-        """
-        Check if two values are equal.
-        """
+        """Check if two values are equal."""
         if isinstance(val1, (Variable, TaggedVariable)) and isinstance(
             val2, (Variable, TaggedVariable)
         ):
@@ -83,68 +148,3 @@ class AssemblyCopyPropagation(DataFlowAnalysis):
             return val1.val == val2.val
 
         return False
-
-    def __str__(self) -> str:
-        """
-        Print the CFG with dataflow annotations embedded in statements.
-        Annotate variables in expressions with their known values.
-        """
-        lines = []
-        blocks = list(self.cfg.blocks.values())
-
-        for block in blocks:
-            # block header
-            if block.successors:
-                succ_names = [succ.id for succ in block.successors]
-                succ_str = f"#succs=[{', '.join(succ_names)}]"
-            else:
-                succ_str = "#succs=[]"
-
-            lines.append(f"{block.id}: {succ_str}")
-
-            # get the input state for this block
-            input_state = self.input_states.get(block.id, {})
-
-            # annotate each statement with analysis output
-            for stmt in block.statements:
-                annotated_stmt = self._annotate_statement(stmt, input_state)
-                lines.append(f"    {annotated_stmt}")
-
-            lines.append("")
-
-        return "\n".join(lines)
-
-    def _annotate_statement(self, stmt, state: dict) -> str:
-        """Annotate a statement with dataflow information."""
-
-        match stmt:
-            case Assign(lhs, rhs):
-                rhs_str = self._annotate_expression(rhs, state)
-                return f"{str(lhs)} = {rhs_str}"
-            case Assert(exp):
-                exp_str = self._annotate_expression(exp, state)
-                return f"assert({exp_str})"
-            case _:
-                return str(stmt)
-
-    def _annotate_expression(self, expr, state: dict) -> str:
-        """Recursively annotate an expression with dataflow information."""
-
-        match expr:
-            case Literal(value):
-                return qual_str(value)
-            case TaggedVariable(Variable(name, _), id):
-                var_str = f"{name}_{id}"
-                if name in state:
-                    return f"{var_str}: {str(state[name])}"
-                return var_str
-            case Variable(name, _):
-                if name in state:
-                    return f"{name}: {str(state[name])}"
-                return str(name)
-            case Call(Literal(_) as lit, args):
-                # annotate each argument
-                annotated_args = [self._annotate_expression(arg, state) for arg in args]
-                return f"{qual_str(lit.val)}({', '.join(annotated_args)})"
-            case _:
-                return str(expr)

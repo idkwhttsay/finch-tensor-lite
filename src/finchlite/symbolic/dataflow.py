@@ -83,9 +83,38 @@ class DataFlowAnalysis(ABC):
             block.id: {} for block in cfg.blocks.values()
         }
 
-    @abstractmethod
     def __str__(self) -> str:
-        """Print the dataflow analysis results in a structured format."""
+        """Generic printer for dataflow analyses over a CFG."""
+        lines: list[str] = []
+        blocks = list(self.cfg.blocks.values())
+
+        for block in blocks:
+            if block.successors:
+                succ_names = [succ.id for succ in block.successors]
+                succ_str = f"#succs=[{', '.join(succ_names)}]"
+            else:
+                succ_str = "#succs=[]"
+
+            lines.append(f"{block.id}: {succ_str}")
+
+            # get the input state for this block
+            input_state = self.input_states.get(block.id, {})
+
+            # delegate formatting of each statement to subclass
+            lines.extend(
+                f"    {self.stmt_str(stmt, input_state)}" for stmt in block.statements
+            )
+
+            lines.append("")
+
+        return "\n".join(lines)
+
+    @abstractmethod
+    def stmt_str(self, stmt, state: dict) -> str:
+        """
+        Format a single statement given the current lattice state.
+        Implement in subclasses or IR-specific abstract bases.
+        """
         ...
 
     @abstractmethod
