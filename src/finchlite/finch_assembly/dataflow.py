@@ -1,5 +1,8 @@
 from abc import abstractmethod
 
+from ..symbolic import DataFlowAnalysis
+from ..util import qual_str
+from .cfg_builder import assembly_build_cfg
 from .nodes import (
     AssemblyNode,
     Assert,
@@ -9,9 +12,6 @@ from .nodes import (
     TaggedVariable,
     Variable,
 )
-from .cfg_builder import assembly_build_cfg
-from ..symbolic import DataFlowAnalysis
-from ..util import qual_str
 
 
 def assembly_copy_propagation(node: AssemblyNode):
