@@ -1,6 +1,6 @@
 from abc import abstractmethod
 
-from ..finch_assembly import (
+from .nodes import (
     AssemblyNode,
     Assert,
     Assign,
@@ -8,8 +8,8 @@ from ..finch_assembly import (
     Literal,
     TaggedVariable,
     Variable,
-    assembly_build_cfg,
 )
+from .cfg_builder import assembly_build_cfg
 from ..symbolic import DataFlowAnalysis
 from ..util import qual_str
 

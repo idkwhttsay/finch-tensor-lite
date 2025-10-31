@@ -4,8 +4,8 @@ import numpy as np
 
 import finchlite.finch_assembly as asm
 from finchlite.codegen.numpy_buffer import NumpyBuffer
-from finchlite.dataflow.assembly_dataflow import assembly_copy_propagation
 from finchlite.finch_assembly.cfg_builder import assembly_build_cfg
+from finchlite.finch_assembly.dataflow import assembly_copy_propagation
 
 
 def test_asm_cfg_printer_if(file_regression):
