@@ -401,6 +401,7 @@ def test_tagged_asm_printer_dot(file_regression):
     prgm = assembly_number_uses(prgm)
     file_regression.check(str(prgm), extension=".txt")
 
+
 def test_asm_printer_comprehensive(file_regression):
     a = asm.Variable("a", np.int64)
     b = asm.Variable("b", np.int64)
@@ -600,6 +601,7 @@ def test_asm_printer_comprehensive(file_regression):
 
     root = asm.Module((helper_func, main_func))
     file_regression.check(str(root), extension=".txt")
+
 
 def test_tagged_asm_printer_comprehensive(file_regression):
     a = asm.Variable("a", np.int64)
