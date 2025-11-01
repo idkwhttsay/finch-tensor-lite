@@ -1,7 +1,6 @@
 from abc import abstractmethod
 
 from ..symbolic import DataFlowAnalysis
-from ..util import qual_str
 from .cfg_builder import assembly_build_cfg
 from .nodes import (
     AssemblyNode,
@@ -23,35 +22,33 @@ def assembly_copy_propagation(node: AssemblyNode):
 class AbstractAssemblyDataflow(DataFlowAnalysis):
     def stmt_str(self, stmt, state: dict) -> str:
         """Annotate a statement with lattice values."""
+        lattice_annotations: list[tuple[str, object]] = []
+
         match stmt:
-            case Assign(lhs, rhs):
-                rhs_str = self._expr_str(rhs, state)
-                return f"{str(lhs)} = {rhs_str}"
+            case Assign(_, rhs):
+                self.print_lattice_value(lattice_annotations, state, rhs)
+                if lattice_annotations:
+                    annotations = ", ".join(
+                        f"{name} = {str(val)}" for name, val in lattice_annotations
+                    )
+                    return f"{str(stmt)} \t# {annotations}"
+
+                return str(stmt)
             case Assert(exp):
-                exp_str = self._expr_str(exp, state)
-                return f"assert({exp_str})"
+                self.print_lattice_value(lattice_annotations, state, exp)
+                if lattice_annotations:
+                    annotations = ", ".join(
+                        f"{name} = {str(val)}" for name, val in lattice_annotations
+                    )
+                    return f"{str(stmt)} \t# {annotations}"
+
+                return str(stmt)
             case _:
                 return str(stmt)
 
-    def _expr_str(self, expr, state: dict) -> str:
-        """Annotate an expression with lattice values."""
-        match expr:
-            case Literal(value):
-                return qual_str(value)
-            case TaggedVariable(Variable(name, _), id):
-                var_str = f"{name}_{id}"
-                if name in state:
-                    return f"{var_str}: {self.print_lattice_value(name, state)}"
-                return var_str
-            case Call(Literal(_) as lit, args):
-                annotated_args = [self._expr_str(arg, state) for arg in args]
-                return f"{qual_str(lit.val)}({', '.join(annotated_args)})"
-            case _:
-                return str(expr)
-
     @abstractmethod
-    def print_lattice_value(self, name, state: dict) -> str:
-        """Format the lattice value associated with a variable for annotation."""
+    def print_lattice_value(self, annotated_pairs, state, expr) -> str:
+        """Format the lattice value associated with the dataflow's lattice."""
         ...
 
 
@@ -61,6 +58,22 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
         Copy propagation is a forward analysis.
         """
         return "forward"
+
+    def print_lattice_value(
+        self, annotated_pairs: list[tuple[str, object]], state: dict, expr
+    ):
+        match expr:
+            case TaggedVariable(Variable(name, _), id):
+                var_str = f"{name}_{id}"
+                if name in state:
+                    annotated_pairs.append((var_str, state[name]))
+                return
+            case Call(Literal(_), args):
+                for arg in args:
+                    self.print_lattice_value(annotated_pairs, state, arg)
+                return
+            case _:
+                return
 
     def transfer(self, stmts, state: dict) -> dict:
         new_state = state.copy()
@@ -80,7 +93,7 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
                     for name_i, val_i in new_state.items():
                         if self._get_variable_name(val_i) == var_name:
                             to_remove.append(name_i)
-                    
+
                     for name_i in to_remove:
                         new_state.pop(name_i)
 
@@ -97,14 +110,6 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
                 result[var_name] = state_1[var_name]
 
         return result
-
-    def print_lattice_value(self, name, state: dict) -> str:
-        value = state.get(name)
-        match value:
-            case Literal(v):
-                return qual_str(v)
-            case _:
-                return str(value)
 
     def _get_variable_name(self, var) -> str | None:
         match var:
@@ -135,14 +140,14 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
                     # reached an already visited lattice value -> return
                     if name in visited:
                         return current
-                    
+
                     visited.add(name)
                     nxt = state.get(name)
-                    
+
                     # root lattice value found -> return
                     if nxt is None:
                         return current
-                    
+
                     # continue iterating
                     current = nxt
                     continue
