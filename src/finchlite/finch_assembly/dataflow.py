@@ -90,12 +90,13 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
 
                     # invalidate any copies that directly point to this variable name
                     to_remove: list[str] = []
-                    for name_i, val_i in new_state.items():
-                        if self._get_variable_name(val_i) == var_name:
-                            to_remove.append(name_i)
+                    for name, val in new_state.items():
+                        # check if variable `var_name` is used in `val` expression
+                        if self._check_var_use(var_name, val):
+                            to_remove.append(name)
 
-                    for name_i in to_remove:
-                        new_state.pop(name_i)
+                    for name in to_remove:
+                        new_state.pop(name)
 
         return new_state
 
@@ -104,29 +105,20 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
 
         # only keep copy relationships that exist in both states with the same value
         for var_name in state_1:
-            if var_name in state_2 and self._values_equal(
-                state_1[var_name], state_2[var_name]
-            ):
+            if var_name in state_2 and state_1[var_name] == state_2[var_name]:
                 result[var_name] = state_1[var_name]
 
         return result
 
-    def _get_variable_name(self, var) -> str | None:
-        match var:
-            case TaggedVariable(Variable(name, _), _):
-                return name
+    def _check_var_use(self, name, val) -> bool:
+        match val:
+            case TaggedVariable(Variable(var_name, _), _):
+                return var_name == name
+            case Call(_, args):
+                return any(self._check_var_use(name, arg) for arg in args)
             case _:
-                return None
-
-    def _values_equal(self, val1, val2) -> bool:
-        """Check if two values are equal."""
-        if isinstance(val1, TaggedVariable) and isinstance(val2, TaggedVariable):
-            return val1 == val2
-
-        if isinstance(val1, Literal) and isinstance(val2, Literal):
-            return val1.val == val2.val
-
-        return False
+                # TODO: do I have to consider Stack, GetAttr, Unpack, Repack?
+                return False
 
     def _resolve_root(self, value, state: dict):
         current = value

@@ -34,31 +34,31 @@ main_9: #succs=[main_10, main_11]
     j_3_0: int64 = 0
 
 main_10: #succs=[main_12, main_13]
-    assert(lt(j_3_0, 5)) 	# j_3_0 = 0
-    i_0: int64 = j_3_0 	# j_3_0 = 0
+    assert(lt(j_3_0, 5))
+    i_0: int64 = j_3_0
     temp_4: int64 = i_1
-    result_1: int64 = add(result_2, temp_5) 	# result_2 = 0
+    result_1: int64 = add(result_2, temp_5)
 
 main_11: #succs=[main_15, main_16]
-    assert(not_(lt(j_3_0, 5))) 	# j_3_0 = 0
+    assert(not_(lt(j_3_0, 5)))
 
 main_12: #succs=[main_14]
-    assert(eq(mod(i_2, 2), 0)) 	# i_2 = 0
-    result_3: int64 = mul(result_4, 2) 	# result_4 = add(result_2, temp_5)
+    assert(eq(mod(i_2, 2), 0)) 	# i_2 = j_3_0
+    result_3: int64 = mul(result_4, 2)
 
 main_13: #succs=[main_14]
-    assert(not_(eq(mod(i_2, 2), 0))) 	# i_2 = 0
+    assert(not_(eq(mod(i_2, 2), 0))) 	# i_2 = j_3_0
 
-main_14: #succs=[main_9]
-    j_3_0: int64 = add(j_3_0, 1) 	# j_3_0 = 0
+main_14: #succs=[main_10, main_11]
+    j_3_0: int64 = add(j_3_0, 1)
 
 main_15: #succs=[main_17]
-    assert(gt(result_5, 20)) 	# result_5 = 0
-    c_2: int64 = result_6 	# result_6 = 0
+    assert(gt(result_5, 20))
+    c_2: int64 = result_6
     result_7: int64 = add(c_3, b_3)
 
 main_16: #succs=[main_17]
-    assert(not_(gt(result_5, 20))) 	# result_5 = 0
+    assert(not_(gt(result_5, 20)))
     c_4: int64 = b_4
     result_8: int64 = mul(c_5, 3)
 
@@ -72,18 +72,18 @@ main_18: #succs=[main_20, main_21]
     j_5_0: int64 = 0
 
 main_19: #succs=[main_22, main_23]
-    assert(not_(lt(j_4_0, 3))) 	# j_4_0 = 0
+    assert(not_(lt(j_4_0, 3)))
     d_2: int64 = result_11
 
-main_20: #succs=[main_18]
-    assert(lt(j_5_0, 2)) 	# j_5_0 = 0
-    j_0: int64 = j_5_0 	# j_5_0 = 0
+main_20: #succs=[main_20, main_21]
+    assert(lt(j_5_0, 2))
+    j_0: int64 = j_5_0
     b_5: int64 = j_1
-    result_9: int64 = add(result_10, add(a_6, b_6)) 	# a_6 = j_4_0
-    j_5_0: int64 = add(j_5_0, 1) 	# j_5_0 = 0
+    result_9: int64 = add(result_10, add(a_6, b_6))
+    j_5_0: int64 = add(j_5_0, 1)
 
-main_21: #succs=[main_17]
-    assert(not_(lt(j_5_0, 2))) 	# j_5_0 = 0
+main_21: #succs=[main_18, main_19]
+    assert(not_(lt(j_5_0, 2)))
     j_4_0: int64 = add(j_4_0, 1)
 
 main_22: #succs=[main_25, main_26]

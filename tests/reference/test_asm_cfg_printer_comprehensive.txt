@@ -49,7 +49,7 @@ main_12: #succs=[main_14]
 main_13: #succs=[main_14]
     assert(not_(eq(mod(i_2, 2), 0)))
 
-main_14: #succs=[main_9]
+main_14: #succs=[main_10, main_11]
     j_3_0: int64 = add(j_3_0, 1)
 
 main_15: #succs=[main_17]
@@ -75,14 +75,14 @@ main_19: #succs=[main_22, main_23]
     assert(not_(lt(j_4_0, 3)))
     d_2: int64 = result_11
 
-main_20: #succs=[main_18]
+main_20: #succs=[main_20, main_21]
     assert(lt(j_5_0, 2))
     j_0: int64 = j_5_0
     b_5: int64 = j_1
     result_9: int64 = add(result_10, add(a_6, b_6))
     j_5_0: int64 = add(j_5_0, 1)
 
-main_21: #succs=[main_17]
+main_21: #succs=[main_18, main_19]
     assert(not_(lt(j_5_0, 2)))
     j_4_0: int64 = add(j_4_0, 1)
 
