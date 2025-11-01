@@ -43,10 +43,6 @@ class AbstractAssemblyDataflow(DataFlowAnalysis):
                 if name in state:
                     return f"{var_str}: {self.print_lattice_value(name, state)}"
                 return var_str
-            case Variable(name, _):
-                if name in state:
-                    return f"{name}: {self.print_lattice_value(name, state)}"
-                return str(name)
             case Call(Literal(_) as lit, args):
                 annotated_args = [self._expr_str(arg, state) for arg in args]
                 return f"{qual_str(lit.val)}({', '.join(annotated_args)})"
@@ -71,22 +67,22 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
 
         for stmt in stmts:
             match stmt:
-                case Assign(lhs, rhs):
-                    # Get the variable name being assigned to
-                    var_name = self._get_variable_name(lhs)
+                case Assign(TaggedVariable(var, _), rhs):
+                    # name of the assigned variable
+                    var_name = var.name
 
-                    if var_name is not None:
-                        new_state[var_name] = rhs
+                    # resolve RHS to its root lattice value
+                    resolved_rhs = self._resolve_root(rhs, new_state)
+                    new_state[var_name] = resolved_rhs
 
-                        # invalidate any copies that point
-                        # to the variable being assigned
-                        to_remove = []
-                        for var, val in new_state.items():
-                            if val == lhs:
-                                to_remove.append(var)
-
-                        for var in to_remove:
-                            new_state.pop(var)
+                    # invalidate any copies that directly point to this variable name
+                    to_remove: list[str] = []
+                    for name_i, val_i in new_state.items():
+                        if self._get_variable_name(val_i) == var_name:
+                            to_remove.append(name_i)
+                    
+                    for name_i in to_remove:
+                        new_state.pop(name_i)
 
         return new_state
 
@@ -103,35 +99,15 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
         return result
 
     def print_lattice_value(self, name, state: dict) -> str:
-        visited: set[str] = set()
         value = state.get(name)
-
-        # iterate through states until we reach a Literal or a variable
-        # without a mapping (root value)
-        while True:
-            match value:
-                case Literal(v):
-                    return qual_str(v)
-                case TaggedVariable(Variable(next_name, _), _) | Variable(next_name, _):
-                    # lattice was was already visited -> return
-                    if next_name in visited:
-                        return str(value)
-
-                    visited.add(next_name)
-                    next_val = state.get(next_name)
-
-                    # reached root value -> return
-                    if next_val is None:
-                        return str(value)
-
-                    value = next_val
-                case _:
-                    return str(value)
+        match value:
+            case Literal(v):
+                return qual_str(v)
+            case _:
+                return str(value)
 
     def _get_variable_name(self, var) -> str | None:
         match var:
-            case Variable(name, _):
-                return name
             case TaggedVariable(Variable(name, _), _):
                 return name
             case _:
@@ -139,12 +115,36 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
 
     def _values_equal(self, val1, val2) -> bool:
         """Check if two values are equal."""
-        if isinstance(val1, (Variable, TaggedVariable)) and isinstance(
-            val2, (Variable, TaggedVariable)
-        ):
+        if isinstance(val1, TaggedVariable) and isinstance(val2, TaggedVariable):
             return val1 == val2
 
         if isinstance(val1, Literal) and isinstance(val2, Literal):
             return val1.val == val2.val
 
         return False
+
+    def _resolve_root(self, value, state: dict):
+        current = value
+        visited: set[str] = set()
+
+        while True:
+            match current:
+                case Literal(_):
+                    return current
+                case TaggedVariable(Variable(name, _), _):
+                    # reached an already visited lattice value -> return
+                    if name in visited:
+                        return current
+                    
+                    visited.add(name)
+                    nxt = state.get(name)
+                    
+                    # root lattice value found -> return
+                    if nxt is None:
+                        return current
+                    
+                    # continue iterating
+                    current = nxt
+                    continue
+                case _:
+                    return current
