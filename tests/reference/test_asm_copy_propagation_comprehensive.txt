@@ -22,12 +22,12 @@ main_5: #succs=[main_7, main_8]
 main_6: #succs=[EXIT_1]
 
 main_7: #succs=[main_9]
-    assert(gt(c_1, 5)) 	# c_1 = 10
+    assert(gt(c_1, 5)) 	# c_1 = b_1
     a_2: int64 = add(a_3, d_1) 	# a_3 = 10, d_1 = 5
     b_2: int64 = a_4 	# a_4 = 10
 
 main_8: #succs=[main_9]
-    assert(not_(gt(c_1, 5))) 	# c_1 = 10
+    assert(not_(gt(c_1, 5))) 	# c_1 = b_1
 
 main_9: #succs=[main_10, main_11]
     result_0: int64 = 0
@@ -100,12 +100,12 @@ main_24: #succs=[main_6]
     return b_8
 
 main_25: #succs=[main_27]
-    assert(gt(c_7, 50)) 	# c_7 = result_11
-    result_12: int64 = mul(c_8, 2) 	# c_8 = result_11
+    assert(gt(c_7, 50)) 	# c_7 = d_4
+    result_12: int64 = mul(c_8, 2) 	# c_8 = d_4
 
 main_26: #succs=[main_27]
-    assert(not_(gt(c_7, 50))) 	# c_7 = result_11
-    result_13: int64 = c_9 	# c_9 = result_11
+    assert(not_(gt(c_7, 50))) 	# c_7 = d_4
+    result_13: int64 = c_9 	# c_9 = d_4
 
 main_27: #succs=[main_24]
 

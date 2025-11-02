@@ -81,12 +81,8 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
         for stmt in stmts:
             match stmt:
                 case Assign(TaggedVariable(var, _), rhs):
-                    # name of the assigned variable
                     var_name = var.name
-
-                    # resolve RHS to its root lattice value
-                    resolved_rhs = self._resolve_root(rhs, new_state)
-                    new_state[var_name] = resolved_rhs
+                    new_state[var_name] = rhs
 
                     # invalidate any copies that directly point to this variable name
                     to_remove: list[str] = []
@@ -119,29 +115,3 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
             case _:
                 # TODO: do I have to consider Stack, GetAttr, Unpack, Repack?
                 return False
-
-    def _resolve_root(self, value, state: dict):
-        current = value
-        visited: set[str] = set()
-
-        while True:
-            match current:
-                case Literal(_):
-                    return current
-                case TaggedVariable(Variable(name, _), _):
-                    # reached an already visited lattice value -> return
-                    if name in visited:
-                        return current
-
-                    visited.add(name)
-                    nxt = state.get(name)
-
-                    # root lattice value found -> return
-                    if nxt is None:
-                        return current
-
-                    # continue iterating
-                    current = nxt
-                    continue
-                case _:
-                    return current
