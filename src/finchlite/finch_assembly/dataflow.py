@@ -4,7 +4,6 @@ from ..symbolic import DataFlowAnalysis, PostOrderDFS
 from .cfg_builder import assembly_build_cfg
 from .nodes import (
     AssemblyNode,
-    Assert,
     Assign,
     TaggedVariable,
     Variable,
