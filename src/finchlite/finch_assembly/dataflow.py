@@ -1,13 +1,11 @@
 from abc import abstractmethod
 
-from ..symbolic import DataFlowAnalysis
+from ..symbolic import DataFlowAnalysis, PostOrderDFS
 from .cfg_builder import assembly_build_cfg
 from .nodes import (
     AssemblyNode,
     Assert,
     Assign,
-    Call,
-    Literal,
     TaggedVariable,
     Variable,
 )
@@ -31,34 +29,20 @@ class AbstractAssemblyDataflow(DataFlowAnalysis):
     """Assembly-specific base for dataflow analyses."""
 
     def stmt_str(self, stmt, state: dict) -> str:
-        """Annotate a statement with lattice values."""
-        lattice_annotations: list[tuple[str, object]] = []
+        """Annotate a statement with lattice values.
 
-        match stmt:
-            case Assign(_, rhs):
-                self.print_lattice_value(lattice_annotations, state, rhs)
-                if lattice_annotations:
-                    annotations = ", ".join(
-                        f"{name} = {str(val)}" for name, val in lattice_annotations
-                    )
-                    return f"{str(stmt)} \t# {annotations}"
-
-                return str(stmt)
-            case Assert(exp):
-                self.print_lattice_value(lattice_annotations, state, exp)
-                if lattice_annotations:
-                    annotations = ", ".join(
-                        f"{name} = {str(val)}" for name, val in lattice_annotations
-                    )
-                    return f"{str(stmt)} \t# {annotations}"
-
-                return str(stmt)
-            case _:
-                return str(stmt)
+        Delegates expression traversal and collection of (name,value) pairs to
+        ``print_lattice_value`` which now returns the annotation list directly.
+        """
+        annotations = self.print_lattice_value(state, stmt)
+        if annotations:
+            annostr = ", ".join(f"{name} = {str(val)}" for name, val in annotations)
+            return f"{stmt} \t# {annostr}"
+        return str(stmt)
 
     @abstractmethod
-    def print_lattice_value(self, annotated_pairs, state, expr) -> str:
-        """Format the lattice value associated with the dataflow's lattice."""
+    def print_lattice_value(self, state, stmt_or_expr) -> list[tuple[str, object]]:
+        """Return list of (var_instance_name, lattice_value) pairs for a stmt/expr."""
         ...
 
 
@@ -76,22 +60,24 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
         """
         return "forward"
 
-    def print_lattice_value(
-        self, annotated_pairs: list[tuple[str, object]], state: dict, expr
-    ):
-        """Collect lattice annotations for variables mentioned in ``expr``."""
-        match expr:
-            case TaggedVariable(Variable(name, _), id):
-                var_str = f"{name}_{id}"
-                if name in state:
-                    annotated_pairs.append((var_str, state[name]))
-                return
-            case Call(Literal(_), args):
-                for arg in args:
-                    self.print_lattice_value(annotated_pairs, state, arg)
-                return
-            case _:
-                return
+    def print_lattice_value(self, state, stmt) -> list[tuple[str, object]]:
+        """Collect lattice annotations for variables used in a stmt or expr."""
+        annotated: list[tuple[str, object]] = []
+        target = stmt
+        match target:
+            case Assign(_, rhs):
+                target = rhs
+            case Assert(exp):
+                target = exp
+
+        for node in PostOrderDFS(target):
+            match node:
+                case TaggedVariable(Variable(name, _), id):
+                    if name in state:
+                        annotated.append((f"{name}_{id}", state[name]))
+                case _:
+                    continue
+        return annotated
 
     def transfer(self, stmts, state: dict) -> dict:
         """Transfer function over a sequence of statements.
