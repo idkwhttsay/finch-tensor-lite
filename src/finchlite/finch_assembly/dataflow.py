@@ -101,10 +101,10 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
                     # invalidate any copies that directly point to this variable name
                     to_remove: list[str] = []
                     for name, val in new_state.items():
-                        if (
-                            isinstance(val, TaggedVariable)
-                            and val.variable.name == var_name
-                        ):
+                        # `val` should be TaggedVariable, otherwise something is wrong
+                        assert isinstance(val, TaggedVariable)
+
+                        if val.variable.name == var_name:
                             to_remove.append(name)
 
                     for name in to_remove:
