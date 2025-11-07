@@ -3,7 +3,11 @@ from abc import ABC, abstractmethod
 
 
 class BasicBlock:
-    """A basic block of Finch's Control Flow Graph."""
+    """Linear sequence of statements with a single entry and exit.
+
+    Successor/predecessor lists encode the CFG edges. Statements execute in
+    order; no internal branching occurs within a BasicBlock.
+    """
 
     def __init__(self, id: str) -> None:
         self.id = id
@@ -41,7 +45,11 @@ class BasicBlock:
 
 
 class ControlFlowGraph:
-    """Control-Flow Graph (CFG) for FinchAssembly."""
+    """Collection of BasicBlocks plus explicit ENTRY and EXIT nodes.
+
+    Provides helpers to allocate uniquely named blocks and holds the global
+    block mapping used by dataflow analyses.
+    """
 
     def __init__(self):
         self.block_counter = 0
