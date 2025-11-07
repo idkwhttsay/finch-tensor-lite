@@ -40,7 +40,7 @@ class AbstractAssemblyDataflow(DataFlowAnalysis):
         return str(stmt)
 
     @abstractmethod
-    def print_lattice_value(self, state, stmt_or_expr) -> list[tuple[str, object]]:
+    def print_lattice_value(self, state, stmt) -> list[tuple[str, object]]:
         """Return list of (var_instance_name, lattice_value) pairs for a stmt/expr."""
         ...
 
