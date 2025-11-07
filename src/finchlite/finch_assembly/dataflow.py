@@ -67,8 +67,6 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
         match target:
             case Assign(_, rhs):
                 target = rhs
-            case Assert(exp):
-                target = exp
 
         for node in PostOrderDFS(target):
             match node:
