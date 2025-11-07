@@ -8,11 +8,11 @@ if_else_2: #succs=[if_else_4, if_else_5]
 if_else_3: #succs=[EXIT_1]
 
 if_else_4: #succs=[if_else_6]
-    assert(eq(a_1, 5)) 	# a_1 = 5
-    a_2: int64 = add(a_3, 10) 	# a_3 = 5
+    assert(eq(a_1, 5))
+    a_2: int64 = add(a_3, 10)
 
 if_else_5: #succs=[if_else_6]
-    assert(not_(eq(a_1, 5))) 	# a_1 = 5
+    assert(not_(eq(a_1, 5)))
 
 if_else_6: #succs=[if_else_7, if_else_8]
 

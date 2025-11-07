@@ -1,3 +1,4 @@
+import copy
 from abc import ABC, abstractmethod
 
 
@@ -100,10 +101,18 @@ class DataFlowAnalysis(ABC):
             # get the input state for this block
             input_state = self.input_states.get(block.id, {})
 
-            # delegate formatting of each statement to subclass
-            lines.extend(
-                f"    {self.stmt_str(stmt, input_state)}" for stmt in block.statements
-            )
+            if self.direction() == "forward":
+                state = copy.deepcopy(input_state)
+                for stmt in block.statements:
+                    lines.append(f"    {self.stmt_str(stmt, state)}")
+                    # advance state with current statement
+                    state = self.transfer([stmt], state)
+            else:
+                # TODO: implement "backward" direction printing
+                lines.extend(
+                    f"    {self.stmt_str(stmt, input_state)}"
+                    for stmt in block.statements
+                )
 
             lines.append("")
 
