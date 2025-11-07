@@ -75,6 +75,22 @@ class ControlFlowGraph:
 
 
 class DataFlowAnalysis(ABC):
+    """
+    Base class for performing data flow analyses over a ControlFlowGraph.
+
+    This abstract class implements a generic work-list algorithm that can run either
+    in a "forward" or "backward" direction. Subclasses must provide IR-specific
+    semantics by implementing the abstract methods: transfer, join, stmt_str and
+    direction.
+
+    Key attributes
+    - cfg: the ControlFlowGraph to analyze.
+    - input_states: a mapping from basic block id to the lattice state that holds
+        at the entry of the block.
+    - output_states: a mapping from basic block id to the lattice state that holds
+        at the exit of the block.
+    """
+
     def __init__(self, cfg: ControlFlowGraph):
         self.cfg: ControlFlowGraph = cfg
         self.input_states: dict[str, dict] = {
@@ -85,11 +101,24 @@ class DataFlowAnalysis(ABC):
         }
 
     def __str__(self) -> str:
-        """Generic printer for dataflow analyses over a CFG."""
+        """
+        Return a string representation describing the current dataflow
+        analysis state over the control-flow graph (CFG).
+
+        The output lists each basic block in the order
+        produced by self.cfg.blocks.values().
+        For every block the printed form is:
+
+            <block.id>: #succs=[<succ_id>, ...]
+                <stmt_representation_for_first_stmt>
+                <stmt_representation_for_second_stmt>
+                ...
+        """
         lines: list[str] = []
         blocks = list(self.cfg.blocks.values())
 
         for block in blocks:
+            # get successors of the block
             if block.successors:
                 succ_names = [succ.id for succ in block.successors]
                 succ_str = f"#succs=[{', '.join(succ_names)}]"
@@ -102,7 +131,12 @@ class DataFlowAnalysis(ABC):
             input_state = self.input_states.get(block.id, {})
 
             if self.direction() == "forward":
+                # deep copy the input_state, otherwise original state
+                # in the input_states will be changed,
+                # which can lead to errors in future
                 state = copy.deepcopy(input_state)
+
+                # print each statement using subclasses stmt_str method
                 for stmt in block.statements:
                     lines.append(f"    {self.stmt_str(stmt, state)}")
                     # advance state with current statement
