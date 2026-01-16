@@ -44,7 +44,7 @@ def assembly_build_cfg(node: AssemblyNode):
     # build cfg based on the numbered AST and return it
     return ctx.build(assembly_number_uses(node))
 
-
+# TODO: number statements, instead of variables
 def assembly_number_uses(root: AssemblyNode) -> AssemblyNode:
     """
     Number every Variable occurrence in a post-order traversal.
