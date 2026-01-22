@@ -1,4 +1,6 @@
 import operator
+from dataclasses import replace
+from typing import Any, cast
 
 import numpy as np
 
@@ -9,6 +11,7 @@ from ..symbolic import (
 )
 from .nodes import (
     AssemblyNode,
+    AssemblyStatement,
     Assert,
     Assign,
     Block,
@@ -40,6 +43,10 @@ def assembly_build_cfg(node: AssemblyNode):
     return ctx.build(node)
 
 
+def _not_expr(cond):
+    return Call(Literal(operator.not_), (cond,))
+
+
 class AssemblyCFGBuilder:
     """Incrementally builds control-flow graph for Finch Assembly IR."""
 
@@ -47,10 +54,16 @@ class AssemblyCFGBuilder:
         self.cfg: ControlFlowGraph = ControlFlowGraph()
         self.current_block: BasicBlock = self.cfg.entry_block
         self.namespace = namespace or Namespace()
+        self._sid_counter = 0
 
-    def emit(self, stmt) -> None:
-        """Add a statement to the current block, assigning it a unique stmt id."""
-        self.current_block.add_statement(self.cfg.number_statement(stmt))
+    def emit(self, stmt: AssemblyStatement) -> None:
+        """Add a statement to the current block."""
+        if getattr(stmt, "sid", None) is None:
+            stmt = cast(
+                AssemblyStatement, replace(cast(Any, stmt), sid=self._sid_counter)
+            )
+            self._sid_counter += 1
+        self.current_block.add_statement(stmt)
 
     def build(self, node: AssemblyNode) -> ControlFlowGraph:
         return self(node)
@@ -94,14 +107,7 @@ class AssemblyCFGBuilder:
                 self.current_block.add_successor(after_block)
 
                 self.current_block = else_block
-                self.emit(
-                    Assert(
-                        Call(
-                            Literal(operator.not_),
-                            (cond,),
-                        )
-                    )
-                )
+                self.emit(Assert(_not_expr(cond)))
                 self(else_body, break_block, return_block)
                 self.current_block.add_successor(after_block)
 
@@ -122,66 +128,41 @@ class AssemblyCFGBuilder:
                 self.current_block.add_successor(body_block)
                 self.current_block.add_successor(after_block)
                 self.current_block = after_block
-                self.emit(
-                    Assert(
-                        Call(
-                            Literal(operator.not_),
-                            (cond,),
-                        )
-                    )
-                )
+                self.emit(Assert(_not_expr(cond)))
             case ForLoop(var, start, end, body):
-                before_block = self.current_block
-
                 fic_var_name = self.namespace.freshen("j")
                 fic_var = Variable(fic_var_name, np.int64)
+
+                # init
                 self.emit(Assign(fic_var, start))
 
-                # create while loop condition: j < end
-                loop_condition = Call(Literal(operator.lt), (fic_var, end))
-
-                # create loop body with i = j assignment and increment
-                loop_body = Block(
-                    (
-                        Assign(var, fic_var),
-                        body,
-                        Assign(
-                            fic_var,
-                            Call(
-                                Literal(operator.add),
-                                (fic_var, Literal(np.int64(1))),
-                            ),
-                        ),
-                    )
+                # while (j < end)
+                cond = Call(Literal(operator.lt), (fic_var, end))
+                inc = Assign(
+                    fic_var,
+                    Call(
+                        Literal(operator.add),
+                        (fic_var, Literal(np.int64(1))),
+                    ),
                 )
-
-                self(WhileLoop(loop_condition, loop_body), break_block, return_block)
+                loop_body = Block((Assign(var, fic_var), body, inc))
+                self(WhileLoop(cond, loop_body), break_block, return_block)
             case BufferLoop(buf, var, body):
-                before_block = self.current_block
-
                 fic_var_name = self.namespace.freshen("j")
                 fic_var = Variable(fic_var_name, np.int64)
+
                 self.emit(Assign(fic_var, Literal(np.int64(0))))
 
-                # create while loop condition: i < length(buf)
-                loop_condition = Call(Literal(operator.lt), (fic_var, Length(buf)))
-
-                # create loop body with var = buf[i] assignment and increment
-                loop_body = Block(
-                    (
-                        Assign(var, Load(buf, fic_var)),
-                        body,
-                        Assign(
-                            fic_var,
-                            Call(
-                                Literal(operator.add),
-                                (fic_var, Literal(np.int64(1))),
-                            ),
-                        ),
-                    )
+                cond = Call(Literal(operator.lt), (fic_var, Length(buf)))
+                inc = Assign(
+                    fic_var,
+                    Call(
+                        Literal(operator.add),
+                        (fic_var, Literal(np.int64(1))),
+                    ),
                 )
-
-                self(WhileLoop(loop_condition, loop_body), break_block, return_block)
+                loop_body = Block((Assign(var, Load(buf, fic_var)), body, inc))
+                self(WhileLoop(cond, loop_body), break_block, return_block)
             case Return(value):
                 self.emit(Return(value))
                 assert return_block

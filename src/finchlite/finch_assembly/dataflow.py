@@ -1,7 +1,6 @@
 from abc import abstractmethod
 
 from ..symbolic import DataFlowAnalysis, PostOrderDFS
-from ..symbolic.dataflow import NumberedStatement
 from .cfg_builder import assembly_build_cfg
 from .nodes import (
     AssemblyNode,
@@ -68,9 +67,6 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
         annotated: list[tuple[str, object]] = []
         target = stmt
 
-        if isinstance(target, NumberedStatement):
-            target = target.stmt
-
         match target:
             case Assign(_, rhs):
                 target = rhs
@@ -97,9 +93,8 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
         return state
 
     def _unpack_stmt(self, stmt):
-        if isinstance(stmt, NumberedStatement):
-            return stmt.id, stmt.stmt
-        return None, stmt
+        sid = getattr(stmt, "sid", None)
+        return sid, stmt
 
     def _prune_inconsistent_copies(self, defs: dict, copies: dict) -> dict:
         pruned: dict[str, tuple[str, int | None]] = {}
