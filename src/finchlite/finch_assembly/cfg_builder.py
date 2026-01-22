@@ -1,6 +1,5 @@
 import operator
 from dataclasses import replace
-from typing import Any, cast
 
 import numpy as np
 
