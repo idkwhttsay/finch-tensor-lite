@@ -1,6 +1,6 @@
 import operator
 from dataclasses import replace
-from typing import cast
+from typing import Any, cast
 
 import numpy as np
 
@@ -11,6 +11,7 @@ from ..symbolic import (
 )
 from .nodes import (
     AssemblyNode,
+    AssemblyStatement,
     Assert,
     Assign,
     Block,
@@ -44,7 +45,7 @@ def assembly_build_cfg(node: AssemblyNode):
     return ctx.build(numbered)
 
 
-def _as_block(stmt: AssemblyNode) -> Block:
+def _as_block(stmt: AssemblyStatement) -> Block:
     if isinstance(stmt, Block):
         return stmt
     if isinstance(stmt, tuple):
@@ -68,7 +69,7 @@ def assembly_desugar(root: AssemblyNode, namespace: Namespace) -> AssemblyNode:
       immediately after each `WhileLoop` statement
     """
 
-    def go(node: AssemblyNode) -> AssemblyNode:
+    def go(node: AssemblyNode):
         match node:
             case Module(funcs):
                 return Module(tuple(go(f) for f in funcs))
@@ -80,7 +81,7 @@ def assembly_desugar(root: AssemblyNode, namespace: Namespace) -> AssemblyNode:
                 prologue = tuple(Assign(arg, arg) for arg in args)
                 return Function(name, args, Block((*prologue, *body_block.bodies)))
             case Block(bodies, _):
-                new_bodies: list[AssemblyNode] = []
+                new_bodies: list[AssemblyStatement] = []
                 for b in bodies:
                     b2 = go(b)
                     new_bodies.append(b2)
@@ -161,13 +162,13 @@ def assembly_number_statements(root: AssemblyNode) -> AssemblyNode:
 
     sid = 0
 
-    def stamp(stmt: AssemblyNode) -> AssemblyNode:
+    def stamp(stmt) -> AssemblyStatement:
         nonlocal sid
-        stamped = cast(AssemblyNode, replace(stmt, sid=sid))
+        stamped = replace(stmt, sid=sid)
         sid += 1
         return stamped
 
-    def go(node: AssemblyNode) -> AssemblyNode:
+    def go(node: AssemblyNode):
         match node:
             case Module(funcs):
                 return Module(tuple(go(f) for f in funcs))
@@ -281,7 +282,7 @@ class AssemblyCFGBuilder:
                 unreachable_block = self.cfg.new_block()
                 self.current_block = unreachable_block
             case Break():
-                self.emit(Break(), node.sid)
+                self.emit(Break(node.sid))
                 assert break_block
                 self.current_block.add_successor(break_block)
                 unreachable_block = self.cfg.new_block()
