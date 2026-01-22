@@ -1,6 +1,6 @@
 import operator
 from dataclasses import replace
-from typing import Any, cast
+from typing import cast
 
 import numpy as np
 
@@ -11,7 +11,6 @@ from ..symbolic import (
 )
 from .nodes import (
     AssemblyNode,
-    AssemblyStatement,
     Assert,
     Assign,
     Block,
@@ -40,11 +39,167 @@ from .nodes import (
 
 def assembly_build_cfg(node: AssemblyNode):
     ctx = AssemblyCFGBuilder(namespace=Namespace(node))
-    return ctx.build(node)
+    lowered = assembly_desugar(node, namespace=ctx.namespace)
+    numbered = assembly_number_statements(lowered)
+    return ctx.build(numbered)
 
 
-def _not_expr(cond):
+def _as_block(stmt: AssemblyNode) -> Block:
+    if isinstance(stmt, Block):
+        return stmt
+    if isinstance(stmt, tuple):
+        return Block(stmt)
+    return Block((stmt,))
+
+
+def _as_not_expr(cond):
     return Call(Literal(operator.not_), (cond,))
+
+
+def assembly_desugar(root: AssemblyNode, namespace: Namespace) -> AssemblyNode:
+    """
+    Lower surface syntax to a core AST shape before CFG construction.
+
+    - `If(cond, body)` -> `IfElse(cond, body, Block())`
+    - `IfElse` branch bodies get leading `Assert(cond)`/`Assert(not cond)`
+    - `ForLoop`/`BufferLoop` -> explicit `Assign`+`WhileLoop` with increment
+    - `WhileLoop(cond, body)` gets `Assert(cond)` prepended to its body
+    - `Block(..., WhileLoop(cond, ...), ...)` gets `Assert(not cond)` inserted
+      immediately after each `WhileLoop` statement
+    """
+
+    def go(node: AssemblyNode) -> AssemblyNode:
+        match node:
+            case Module(funcs):
+                return Module(tuple(go(f) for f in funcs))
+            case Function(name, args, body):
+                body_2 = go(body)
+                body_block = _as_block(body_2)
+
+                # Make argument definitions explicit so they get statement ids.
+                prologue = tuple(Assign(arg, arg) for arg in args)
+                return Function(name, args, Block((*prologue, *body_block.bodies)))
+            case Block(bodies, _):
+                new_bodies: list[AssemblyNode] = []
+                for b in bodies:
+                    b2 = go(b)
+                    new_bodies.append(b2)
+
+                    # Insert loop-exit assertion immediately after each while.
+                    if isinstance(b2, WhileLoop):
+                        new_bodies.append(Assert(_as_not_expr(b2.condition)))
+
+                return Block(tuple(new_bodies))
+            case If(cond, body, _):
+                return go(IfElse(cond, body, Block(())))
+            case IfElse(cond, body, else_body, _):
+                then_block = _as_block(go(body))
+                else_block = _as_block(go(else_body))
+
+                then_block = Block((Assert(cond), *then_block.bodies))
+                else_block = Block((Assert(_as_not_expr(cond)), *else_block.bodies))
+
+                return IfElse(cond, then_block, else_block)
+            case WhileLoop(cond, body, _):
+                body_block = _as_block(go(body))
+                body_block = Block((Assert(cond), *body_block.bodies))
+                return WhileLoop(cond, body_block)
+            case ForLoop(var, start, end, body, _):
+                fic_var_name = namespace.freshen("j")
+                fic_var = Variable(fic_var_name, np.int64)
+
+                init = Assign(fic_var, start)
+                cond = Call(Literal(operator.lt), (fic_var, end))
+
+                body_stmt = go(body)
+                body_block = _as_block(body_stmt)
+
+                inc = Assign(
+                    fic_var,
+                    Call(
+                        Literal(operator.add),
+                        (fic_var, Literal(np.int64(1))),
+                    ),
+                )
+
+                loop_body = Block((Assign(var, fic_var), *body_block.bodies, inc))
+                return go(Block((init, WhileLoop(cond, loop_body))))
+            case BufferLoop(buf, var, body, _):
+                fic_var_name = namespace.freshen("j")
+                fic_var = Variable(fic_var_name, np.int64)
+
+                init = Assign(fic_var, Literal(np.int64(0)))
+                cond = Call(Literal(operator.lt), (fic_var, Length(buf)))
+
+                body_stmt = go(body)
+                body_block = _as_block(body_stmt)
+
+                inc = Assign(
+                    fic_var,
+                    Call(
+                        Literal(operator.add),
+                        (fic_var, Literal(np.int64(1))),
+                    ),
+                )
+
+                loop_body = Block(
+                    (
+                        Assign(var, Load(buf, fic_var)),
+                        *body_block.bodies,
+                        inc,
+                    )
+                )
+                return go(Block((init, WhileLoop(cond, loop_body))))
+            case node:
+                return node
+
+    return go(root)
+
+
+def assembly_number_statements(root: AssemblyNode) -> AssemblyNode:
+    """Assign sid to statements."""
+
+    sid = 0
+
+    def stamp(stmt: AssemblyNode) -> AssemblyNode:
+        nonlocal sid
+        stamped = cast(AssemblyNode, replace(stmt, sid=sid))
+        sid += 1
+        return stamped
+
+    def go(node: AssemblyNode) -> AssemblyNode:
+        match node:
+            case Module(funcs):
+                return Module(tuple(go(f) for f in funcs))
+            case Function(name, args, body):
+                return Function(name, args, go(body))
+            case Block(bodies, _):
+                return Block(tuple(go(b) for b in bodies))
+            case IfElse(cond, body, else_body, _):
+                return IfElse(cond, go(body), go(else_body))
+            case WhileLoop(cond, body, _):
+                return WhileLoop(cond, go(body))
+            case If(cond, body, _):
+                return If(cond, go(body))
+            case (
+                (
+                    Unpack()
+                    | Repack()
+                    | Resize()
+                    | SetAttr()
+                    | Print()
+                    | Store()
+                    | Assign()
+                    | Assert()
+                    | Return()
+                    | Break()
+                ) as stmt
+            ):
+                return stamp(stmt)
+            case node:
+                return node
+
+    return go(root)
 
 
 class AssemblyCFGBuilder:
@@ -54,15 +209,9 @@ class AssemblyCFGBuilder:
         self.cfg: ControlFlowGraph = ControlFlowGraph()
         self.current_block: BasicBlock = self.cfg.entry_block
         self.namespace = namespace or Namespace()
-        self._sid_counter = 0
 
-    def emit(self, stmt: AssemblyStatement) -> None:
+    def emit(self, stmt) -> None:
         """Add a statement to the current block."""
-        if getattr(stmt, "sid", None) is None:
-            stmt = cast(
-                AssemblyStatement, replace(cast(Any, stmt), sid=self._sid_counter)
-            )
-            self._sid_counter += 1
         self.current_block.add_statement(stmt)
 
     def build(self, node: AssemblyNode) -> ControlFlowGraph:
@@ -102,12 +251,10 @@ class AssemblyCFGBuilder:
                 before_block.add_successor(else_block)
 
                 self.current_block = if_block
-                self.emit(Assert(cond))
                 self(body, break_block, return_block)
                 self.current_block.add_successor(after_block)
 
                 self.current_block = else_block
-                self.emit(Assert(_not_expr(cond)))
                 self(else_body, break_block, return_block)
                 self.current_block.add_successor(after_block)
 
@@ -122,67 +269,25 @@ class AssemblyCFGBuilder:
                 before_block.add_successor(after_block)
 
                 self.current_block = body_block
-                self.emit(Assert(cond))
                 self(body, after_block, return_block)
 
                 self.current_block.add_successor(body_block)
                 self.current_block.add_successor(after_block)
                 self.current_block = after_block
-                self.emit(Assert(_not_expr(cond)))
-            case ForLoop(var, start, end, body):
-                fic_var_name = self.namespace.freshen("j")
-                fic_var = Variable(fic_var_name, np.int64)
-
-                # init
-                self.emit(Assign(fic_var, start))
-
-                # while (j < end)
-                cond = Call(Literal(operator.lt), (fic_var, end))
-                inc = Assign(
-                    fic_var,
-                    Call(
-                        Literal(operator.add),
-                        (fic_var, Literal(np.int64(1))),
-                    ),
-                )
-                loop_body = Block((Assign(var, fic_var), body, inc))
-                self(WhileLoop(cond, loop_body), break_block, return_block)
-            case BufferLoop(buf, var, body):
-                fic_var_name = self.namespace.freshen("j")
-                fic_var = Variable(fic_var_name, np.int64)
-
-                self.emit(Assign(fic_var, Literal(np.int64(0))))
-
-                cond = Call(Literal(operator.lt), (fic_var, Length(buf)))
-                inc = Assign(
-                    fic_var,
-                    Call(
-                        Literal(operator.add),
-                        (fic_var, Literal(np.int64(1))),
-                    ),
-                )
-                loop_body = Block((Assign(var, Load(buf, fic_var)), body, inc))
-                self(WhileLoop(cond, loop_body), break_block, return_block)
             case Return(value):
-                self.emit(Return(value))
+                self.emit(Return(value, node.sid))
                 assert return_block
                 self.current_block.add_successor(return_block)
                 unreachable_block = self.cfg.new_block()
                 self.current_block = unreachable_block
             case Break():
-                self.emit(Break())
+                self.emit(Break(), node.sid)
                 assert break_block
                 self.current_block.add_successor(break_block)
                 unreachable_block = self.cfg.new_block()
                 self.current_block = unreachable_block
-            case Function(_, args, body):
-                for arg in args:
-                    if not isinstance(arg, Variable):
-                        raise NotImplementedError(f"Unrecognized argument type: {arg}")
-
-                    # Ensure arguments appear as assigned/defined for dataflow.
-                    self.emit(Assign(arg, arg))
-
+            case Function(_, _, body):
+                # Function argument definitions are inserted by `assembly_desugar`.
                 self(body, break_block, return_block)
             case Module(funcs):
                 for func in funcs:
