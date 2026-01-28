@@ -1,5 +1,5 @@
 import operator
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -62,7 +62,6 @@ def assembly_build_cfg(node: AssemblyNode):
 def assembly_desugar(root: AssemblyNode, namespace: Namespace) -> AssemblyNode:
     """
     Lower surface syntax to a core AST shape before CFG construction.
-    Make a deep copy of each node which results in a new AST.
 
     - `If(cond, body)` -> `IfElse(cond, body, Block())`
     - `IfElse` branch bodies get leading `Assert(cond)`/`Assert(not cond)`
@@ -129,7 +128,7 @@ def assembly_desugar(root: AssemblyNode, namespace: Namespace) -> AssemblyNode:
 
                 loop_body = Block((Assign(var, fic_var), *body_block.bodies, inc))
                 return go(Block((init, WhileLoop(cond, loop_body))))
-            case BufferLoop(buf, var, body, _):
+            case BufferLoop(buf, var, body):
                 fic_var_name = namespace.freshen("j")
                 fic_var = Variable(fic_var_name, np.int64)
 
@@ -155,18 +154,13 @@ def assembly_desugar(root: AssemblyNode, namespace: Namespace) -> AssemblyNode:
                 )
                 return go(Block((init, WhileLoop(cond, loop_body))))
             case node:
-                # make a copy of the node
-                return replace(node)
+                return node
 
     return go(root)
 
 
 def assembly_number_statements(root: AssemblyNode) -> AssemblyNode:
-    """
-    Wrap each statement with a NumberedStatement containing a unique id.
-    Doesn't make a copy of the original node, just wraps selected statements
-    into NumberedStatements.
-    """
+    """Wrap each statement with a NumberedStatement containing a unique id."""
     sid = 0
 
     def rw(x: AssemblyNode) -> AssemblyNode | None:

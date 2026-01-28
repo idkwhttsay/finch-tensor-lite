@@ -1,7 +1,7 @@
 from abc import abstractmethod
 
 from ..symbolic import DataFlowAnalysis, PostOrderDFS
-from .cfg_builder import assembly_build_cfg
+from .cfg_builder import NumberedStatement, assembly_build_cfg
 from .nodes import (
     AssemblyNode,
     Assign,
@@ -10,13 +10,10 @@ from .nodes import (
 
 
 def assembly_copy_propagation(node: AssemblyNode):
-    """Run copy-propagation on a FinchAssembly node.
-
-    Args:
-        node: Root FinchAssembly node to analyze.
-
-    Returns:
-        AssemblyCopyPropagation: The completed analysis context.
+    """
+    Run copy-propagation on a FinchAssembly node.
+    Args: node: Root FinchAssembly node to analyze.
+    Returns: AssemblyCopyPropagation: The completed analysis context.
     """
     ctx = AssemblyCopyPropagation(assembly_build_cfg(node))
     ctx.analyze()
@@ -48,8 +45,7 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
     """Copy propagation for FinchAssembly.
 
     Lattice:
-
-    - defs: mapping ``{ var_name: stmt_id | None }`` describing a unique reaching
+    - defs: mapping ``{ var_name: sid | None }`` describing a unique reaching
         definition id for each variable (None means "not uniquely defined").
     - copies: mapping ``{ dst_var: (src_var, src_def_id) }`` describing a direct
         copy ``dst_var = src_var`` that is valid only if ``src_var`` still has the
@@ -57,15 +53,16 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
     """
 
     def direction(self) -> str:
-        """
-        Copy propagation is a forward analysis.
-        """
+        """Copy propagation is a forward analysis."""
         return "forward"
 
     def print_lattice_value(self, state, stmt) -> list[tuple[str, object]]:
         """Collect lattice annotations for variables used in a stmt or expr."""
         annotated: list[tuple[str, object]] = []
         target = stmt
+
+        if isinstance(target, NumberedStatement):
+            target = target.stmt
 
         match target:
             case Assign(_, rhs):
@@ -93,10 +90,9 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
         return state
 
     def _unpack_stmt(self, stmt):
-        """Return (sid, stmt) for a possibly-wrapped NumberedStatement."""
-        if hasattr(stmt, "stmt") and hasattr(stmt, "sid"):
+        if isinstance(stmt, NumberedStatement):
             return stmt.sid, stmt.stmt
-        return getattr(stmt, "sid", None), stmt
+        return None, stmt
 
     def _prune_inconsistent_copies(self, defs: dict, copies: dict) -> dict:
         pruned: dict[str, tuple[str, int | None]] = {}
@@ -130,7 +126,7 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
         copies: dict[str, tuple[str, int | None]] = new_state["copies"]
 
         for wrapped in stmts:
-            stmt_id, stmt = self._unpack_stmt(wrapped)
+            sid, stmt = self._unpack_stmt(wrapped)
             match stmt:
                 case Assign(Variable(lhs_name, _), rhs):
                     # Any assignment kills previous copy info involving lhs.
@@ -145,7 +141,7 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
                         copies.pop(dst, None)
 
                     # Update reaching definition for lhs.
-                    defs[lhs_name] = stmt_id
+                    defs[lhs_name] = sid
 
                     # If rhs is a variable with a unique reaching def, record a copy.
                     if isinstance(rhs, Variable):
