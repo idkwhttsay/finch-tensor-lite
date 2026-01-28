@@ -72,8 +72,6 @@ class AssemblyStatement(AssemblyNode):
     not produce a value, but may modify the state of the machine.
     """
 
-    sid: int | None = None
-
 
 @dataclass(eq=True, frozen=True)
 class Literal(AssemblyExpression):
@@ -183,7 +181,6 @@ class Unpack(AssemblyTree, AssemblyStatement):
 
     lhs: Slot
     rhs: AssemblyExpression
-    sid: int | None = None
 
     @property
     def children(self):
@@ -202,7 +199,6 @@ class Repack(AssemblyTree, AssemblyStatement):
     """
 
     val: Slot
-    sid: int | None = None
 
     @property
     def children(self):
@@ -223,7 +219,6 @@ class Assign(AssemblyTree, AssemblyStatement):
 
     lhs: Variable
     rhs: AssemblyExpression
-    sid: int | None = None
 
     @property
     def children(self):
@@ -267,7 +262,6 @@ class SetAttr(AssemblyTree, AssemblyStatement):
     obj: AssemblyExpression
     attr: Literal
     value: AssemblyExpression
-    sid: int | None = None
 
     @property
     def children(self):
@@ -341,7 +335,6 @@ class Store(AssemblyTree, AssemblyStatement):
     buffer: Slot | Stack
     index: AssemblyExpression
     value: AssemblyExpression
-    sid: int | None = None
 
     @property
     def children(self):
@@ -404,7 +397,6 @@ class StoreDict(AssemblyTree, AssemblyStatement):
     map: Slot | Stack
     index: AssemblyExpression
     value: AssemblyExpression
-    sid: int | None = None
 
     @property
     def children(self):
@@ -423,7 +415,6 @@ class Resize(AssemblyTree, AssemblyStatement):
 
     buffer: Slot | Stack
     new_size: AssemblyExpression
-    sid: int | None = None
 
     @property
     def children(self):
@@ -467,7 +458,6 @@ class ForLoop(AssemblyTree, AssemblyStatement):
     start: AssemblyExpression
     end: AssemblyExpression
     body: AssemblyStatement
-    sid: int | None = None
 
     @property
     def children(self):
@@ -489,7 +479,6 @@ class BufferLoop(AssemblyTree, AssemblyStatement):
     buffer: Slot | Stack
     var: Variable
     body: AssemblyStatement
-    sid: int | None = None
 
     @property
     def children(self):
@@ -509,7 +498,6 @@ class WhileLoop(AssemblyTree, AssemblyStatement):
 
     condition: AssemblyExpression
     body: AssemblyStatement
-    sid: int | None = None
 
     @property
     def children(self):
@@ -529,7 +517,6 @@ class If(AssemblyTree, AssemblyStatement):
 
     condition: AssemblyExpression
     body: AssemblyStatement
-    sid: int | None = None
 
     @property
     def children(self):
@@ -548,7 +535,6 @@ class Assert(AssemblyTree, AssemblyStatement):
     """
 
     exp: AssemblyExpression
-    sid: int | None = None
 
     @property
     def children(self):
@@ -571,7 +557,6 @@ class IfElse(AssemblyTree, AssemblyStatement):
     condition: AssemblyExpression
     body: AssemblyStatement
     else_body: AssemblyStatement
-    sid: int | None = None
 
     @property
     def children(self):
@@ -620,7 +605,6 @@ class Return(AssemblyTree, AssemblyStatement):
     """
 
     arg: AssemblyExpression
-    sid: int | None = None
 
     @property
     def children(self):
@@ -639,8 +623,6 @@ class Break(AssemblyTree, AssemblyStatement):
         """Returns the children of the node."""
         return []
 
-    sid: int | None = None
-
 
 @dataclass(eq=True, frozen=True)
 class Block(AssemblyTree, AssemblyStatement):
@@ -652,7 +634,6 @@ class Block(AssemblyTree, AssemblyStatement):
     """
 
     bodies: tuple[AssemblyStatement, ...] = ()
-    sid: int | None = None
 
     @property
     def children(self):
@@ -696,7 +677,6 @@ class Print(AssemblyTree, AssemblyStatement):
     """
 
     args: tuple[Variable, ...]
-    sid: int | None = None
 
     @property
     def children(self):
@@ -878,4 +858,4 @@ class AssemblyPrinterContext(Context):
                 self.exec(f"{feed}stack({self(obj)}, {str(type_)})")
                 return None
             case node:
-                raise NotImplementedError(node)
+                raise NotImplementedError(node, "AssemblyPrinterContext")

@@ -93,8 +93,10 @@ class AssemblyCopyPropagation(AbstractAssemblyDataflow):
         return state
 
     def _unpack_stmt(self, stmt):
-        sid = getattr(stmt, "sid", None)
-        return sid, stmt
+        """Return (sid, stmt) for a possibly-wrapped NumberedStatement."""
+        if hasattr(stmt, "stmt") and hasattr(stmt, "sid"):
+            return stmt.sid, stmt.stmt
+        return getattr(stmt, "sid", None), stmt
 
     def _prune_inconsistent_copies(self, defs: dict, copies: dict) -> dict:
         pruned: dict[str, tuple[str, int | None]] = {}

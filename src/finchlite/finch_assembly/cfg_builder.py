@@ -1,5 +1,5 @@
 import operator
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -7,6 +7,8 @@ from ..symbolic import (
     BasicBlock,
     ControlFlowGraph,
     Namespace,
+    PostWalk,
+    Rewrite,
 )
 from .nodes import (
     AssemblyNode,
@@ -37,28 +39,30 @@ from .nodes import (
 )
 
 
+@dataclass(eq=True, frozen=True)
+class NumberedStatement(AssemblyStatement):
+    stmt: AssemblyStatement
+    sid: int
+
+    def __str__(self) -> str:
+        return str(self.stmt)
+
+
 def assembly_build_cfg(node: AssemblyNode):
-    ctx = AssemblyCFGBuilder(namespace=Namespace(node))
-    lowered = assembly_desugar(node, namespace=ctx.namespace)
-    numbered = assembly_number_statements(lowered)
+    """Build control-flow graph for a FinchAssembly node and apply desugaring
+    and statement numbering."""
+    namespace = Namespace(node)
+    desugared = assembly_desugar(node, namespace=namespace)
+    numbered = assembly_number_statements(desugared)
+
+    ctx = AssemblyCFGBuilder(namespace=namespace)
     return ctx.build(numbered)
-
-
-def _as_block(stmt: AssemblyStatement) -> Block:
-    if isinstance(stmt, Block):
-        return stmt
-    if isinstance(stmt, tuple):
-        return Block(stmt)
-    return Block((stmt,))
-
-
-def _as_not_expr(cond):
-    return Call(Literal(operator.not_), (cond,))
 
 
 def assembly_desugar(root: AssemblyNode, namespace: Namespace) -> AssemblyNode:
     """
     Lower surface syntax to a core AST shape before CFG construction.
+    Make a deep copy of each node which results in a new AST.
 
     - `If(cond, body)` -> `IfElse(cond, body, Block())`
     - `IfElse` branch bodies get leading `Assert(cond)`/`Assert(not cond)`
@@ -68,18 +72,20 @@ def assembly_desugar(root: AssemblyNode, namespace: Namespace) -> AssemblyNode:
       immediately after each `WhileLoop` statement
     """
 
+    def _as_not_expr(cond):
+        return Call(Literal(operator.not_), (cond,))
+
     def go(node: AssemblyNode):
         match node:
             case Module(funcs):
                 return Module(tuple(go(f) for f in funcs))
             case Function(name, args, body):
                 body_2 = go(body)
-                body_block = _as_block(body_2)
 
                 # Make argument definitions explicit so they get statement ids.
-                prologue = tuple(Assign(arg, arg) for arg in args)
-                return Function(name, args, Block((*prologue, *body_block.bodies)))
-            case Block(bodies, _):
+                func_prologue = tuple(Assign(arg, arg) for arg in args)
+                return Function(name, args, Block((*func_prologue, *body_2.bodies)))
+            case Block(bodies):
                 new_bodies: list[AssemblyStatement] = []
                 for b in bodies:
                     b2 = go(b)
@@ -90,29 +96,28 @@ def assembly_desugar(root: AssemblyNode, namespace: Namespace) -> AssemblyNode:
                         new_bodies.append(Assert(_as_not_expr(b2.condition)))
 
                 return Block(tuple(new_bodies))
-            case If(cond, body, _):
+            case If(cond, body):
                 return go(IfElse(cond, body, Block(())))
-            case IfElse(cond, body, else_body, _):
-                then_block = _as_block(go(body))
-                else_block = _as_block(go(else_body))
+            case IfElse(cond, body, else_body):
+                then_block = go(body)
+                else_block = go(else_body)
 
                 then_block = Block((Assert(cond), *then_block.bodies))
                 else_block = Block((Assert(_as_not_expr(cond)), *else_block.bodies))
 
                 return IfElse(cond, then_block, else_block)
-            case WhileLoop(cond, body, _):
-                body_block = _as_block(go(body))
+            case WhileLoop(cond, body):
+                body_block = go(body)
                 body_block = Block((Assert(cond), *body_block.bodies))
                 return WhileLoop(cond, body_block)
-            case ForLoop(var, start, end, body, _):
+            case ForLoop(var, start, end, body):
                 fic_var_name = namespace.freshen("j")
                 fic_var = Variable(fic_var_name, np.int64)
 
                 init = Assign(fic_var, start)
                 cond = Call(Literal(operator.lt), (fic_var, end))
 
-                body_stmt = go(body)
-                body_block = _as_block(body_stmt)
+                body_block = go(body)
 
                 inc = Assign(
                     fic_var,
@@ -131,8 +136,7 @@ def assembly_desugar(root: AssemblyNode, namespace: Namespace) -> AssemblyNode:
                 init = Assign(fic_var, Literal(np.int64(0)))
                 cond = Call(Literal(operator.lt), (fic_var, Length(buf)))
 
-                body_stmt = go(body)
-                body_block = _as_block(body_stmt)
+                body_block = go(body)
 
                 inc = Assign(
                     fic_var,
@@ -151,55 +155,43 @@ def assembly_desugar(root: AssemblyNode, namespace: Namespace) -> AssemblyNode:
                 )
                 return go(Block((init, WhileLoop(cond, loop_body))))
             case node:
-                return node
+                # make a copy of the node
+                return replace(node)
 
     return go(root)
 
 
 def assembly_number_statements(root: AssemblyNode) -> AssemblyNode:
-    """Assign sid to statements."""
-
+    """
+    Wrap each statement with a NumberedStatement containing a unique id.
+    Doesn't make a copy of the original node, just wraps selected statements
+    into NumberedStatements.
+    """
     sid = 0
 
-    def stamp(stmt) -> AssemblyStatement:
+    def rw(x: AssemblyNode) -> AssemblyNode | None:
         nonlocal sid
-        stamped = replace(stmt, sid=sid)
-        sid += 1
-        return stamped
+        if isinstance(
+            x,
+            (
+                Unpack,
+                Repack,
+                Resize,
+                SetAttr,
+                Print,
+                Store,
+                Assign,
+                Assert,
+                Return,
+                Break,
+            ),
+        ):
+            s = NumberedStatement(x, sid)
+            sid += 1
+            return s
+        return None
 
-    def go(node: AssemblyNode):
-        match node:
-            case Module(funcs):
-                return Module(tuple(go(f) for f in funcs))
-            case Function(name, args, body):
-                return Function(name, args, go(body))
-            case Block(bodies, _):
-                return Block(tuple(go(b) for b in bodies))
-            case IfElse(cond, body, else_body, _):
-                return IfElse(cond, go(body), go(else_body))
-            case WhileLoop(cond, body, _):
-                return WhileLoop(cond, go(body))
-            case If(cond, body, _):
-                return If(cond, go(body))
-            case (
-                (
-                    Unpack()
-                    | Repack()
-                    | Resize()
-                    | SetAttr()
-                    | Print()
-                    | Store()
-                    | Assign()
-                    | Assert()
-                    | Return()
-                    | Break()
-                ) as stmt
-            ):
-                return stamp(stmt)
-            case node:
-                return node
-
-    return go(root)
+    return Rewrite(PostWalk(rw))(root)
 
 
 class AssemblyCFGBuilder:
@@ -224,17 +216,22 @@ class AssemblyCFGBuilder:
         return_block: BasicBlock | None = None,
     ) -> ControlFlowGraph:
         match node:
-            case (
-                Unpack()
-                | Repack()
-                | Resize()
-                | SetAttr()
-                | Print()
-                | Store()
-                | Assign()
-                | Assert()
-            ):
-                self.emit(node)
+            case NumberedStatement(stmt, _):
+                match stmt:
+                    case Return(_):
+                        self.emit(node)
+                        assert return_block
+                        self.current_block.add_successor(return_block)
+                        unreachable_block = self.cfg.new_block()
+                        self.current_block = unreachable_block
+                    case Break():
+                        self.emit(node)
+                        assert break_block
+                        self.current_block.add_successor(break_block)
+                        unreachable_block = self.cfg.new_block()
+                        self.current_block = unreachable_block
+                    case _:
+                        self.emit(node)
             case Block(bodies):
                 for body in bodies:
                     self(body, break_block, return_block)
@@ -274,18 +271,6 @@ class AssemblyCFGBuilder:
                 self.current_block.add_successor(body_block)
                 self.current_block.add_successor(after_block)
                 self.current_block = after_block
-            case Return(value):
-                self.emit(Return(value, node.sid))
-                assert return_block
-                self.current_block.add_successor(return_block)
-                unreachable_block = self.cfg.new_block()
-                self.current_block = unreachable_block
-            case Break():
-                self.emit(Break(node.sid))
-                assert break_block
-                self.current_block.add_successor(break_block)
-                unreachable_block = self.cfg.new_block()
-                self.current_block = unreachable_block
             case Function(_, _, body):
                 # Function argument definitions are inserted by `assembly_desugar`.
                 self(body, break_block, return_block)
@@ -323,6 +308,6 @@ class AssemblyCFGBuilder:
                     # connect function exit block to the exit block of the CFG
                     func_exit_block.add_successor(self.cfg.exit_block)
             case node:
-                raise NotImplementedError(node)
+                raise NotImplementedError(node, "AssemblyCFGBuilder")
 
         return self.cfg
